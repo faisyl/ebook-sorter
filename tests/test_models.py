@@ -58,6 +58,14 @@ def test_merge_keeps_existing_fields():
     assert merged.authors == ["Cory Doctorow"]
 
 
+def test_merge_higher_confidence_overrides():
+    base = BookMetadata(title="filename_title", authors=["filename"], confidence=0.4)
+    other = BookMetadata(title="Real Title", authors=["Real Author"], confidence=0.6)
+    merged = base.merge(other)
+    assert merged.title == "Real Title"
+    assert merged.authors == ["Real Author"]
+
+
 def test_merge_takes_max_confidence():
     base = BookMetadata(confidence=0.4)
     other = BookMetadata(confidence=0.9)

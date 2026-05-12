@@ -29,17 +29,24 @@ class BookMetadata:
         return self.isbn_10 is not None or self.isbn_13 is not None
 
     def merge(self, other: BookMetadata) -> BookMetadata:
+        prefer_other = other.confidence > self.confidence
+
+        def pick(self_val: object, other_val: object) -> object:
+            if self_val and other_val:
+                return other_val if prefer_other else self_val
+            return self_val or other_val
+
         return BookMetadata(
-            title=self.title or other.title,
-            authors=self.authors or other.authors,
+            title=pick(self.title, other.title),
+            authors=pick(self.authors, other.authors),
             isbn_10=self.isbn_10 or other.isbn_10,
             isbn_13=self.isbn_13 or other.isbn_13,
-            publisher=self.publisher or other.publisher,
-            year=self.year or other.year,
+            publisher=pick(self.publisher, other.publisher),
+            year=pick(self.year, other.year),
             series=self.series or other.series,
             series_index=self.series_index if self.series_index is not None else other.series_index,
             language=self.language or other.language,
-            source=self.source or other.source,
+            source=pick(self.source, other.source),
             confidence=max(self.confidence, other.confidence),
             original_path=self.original_path or other.original_path,
             extension=self.extension or other.extension,
