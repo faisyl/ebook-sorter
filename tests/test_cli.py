@@ -59,3 +59,29 @@ def test_cli_organize_dry_run(runner: CliRunner, ebook_folder: Path, tmp_path: P
     ])
     assert result.exit_code == 0
     assert (ebook_folder / "test.pdf").exists()
+
+
+def test_cli_scan_sidecar(runner: CliRunner, ebook_folder: Path):
+    result = runner.invoke(cli, ["scan", str(ebook_folder), "--sidecar"])
+    assert result.exit_code == 0
+    sidecar = ebook_folder / "test.pdf.metadata.json"
+    assert sidecar.exists()
+    import json
+    data = json.loads(sidecar.read_text())
+    assert "title" in data
+
+
+def test_cli_organize_uses_sidecar(runner: CliRunner, ebook_folder: Path, tmp_path: Path):
+    runner.invoke(cli, ["scan", str(ebook_folder), "--sidecar"])
+    sidecar = ebook_folder / "test.pdf.metadata.json"
+    assert sidecar.exists()
+
+    out_dir = tmp_path / "output"
+    out_dir.mkdir()
+    result = runner.invoke(cli, [
+        "organize", str(ebook_folder),
+        "--output-dir", str(out_dir),
+        "--sidecar",
+    ])
+    assert result.exit_code == 0
+    assert "Using sidecar" in result.output

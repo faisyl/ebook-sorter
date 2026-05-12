@@ -19,6 +19,7 @@ from ebook_sorter.lookup.openlibrary import OpenLibraryLookup
 from ebook_sorter.models import BookMetadata
 from ebook_sorter.organizer import Organizer
 from ebook_sorter.pipeline import Pipeline
+from ebook_sorter.sidecar import read_sidecar, write_sidecar
 
 console = Console()
 
@@ -68,8 +69,9 @@ def cli(ctx: click.Context, config_path: str, verbose: bool) -> None:
 
 @cli.command()
 @click.argument("folder", type=click.Path(exists=True))
+@click.option("--sidecar/--no-sidecar", default=False, help="Write .metadata.json sidecar files next to each ebook.")
 @click.pass_context
-def scan(ctx: click.Context, folder: str) -> None:
+def scan(ctx: click.Context, folder: str, sidecar: bool) -> None:
     """Scan a folder and report metadata found (dry-run)."""
     cfg: Config = ctx.obj["config"]
     pipeline = _build_pipeline(cfg)
@@ -91,6 +93,8 @@ def scan(ctx: click.Context, folder: str) -> None:
             meta.isbn or "—",
             f"{meta.confidence:.2f}",
         )
+        if sidecar:
+            write_sidecar(meta, path)
 
     console.print(table)
 
@@ -169,6 +173,7 @@ def identify(ctx: click.Context, file: str) -> None:
 @click.option("--dry-run", is_flag=True, default=False)
 @click.option("--corrupt-dir", type=click.Path(), default=None)
 @click.option("--uncertain-dir", type=click.Path(), default=None)
+@click.option("--sidecar/--no-sidecar", default=False, help="Use/write .metadata.json sidecar files.")
 @click.pass_context
 def organize(
     ctx: click.Context,
@@ -181,6 +186,7 @@ def organize(
     dry_run: bool,
     corrupt_dir: str | None,
     uncertain_dir: str | None,
+    sidecar: bool,
 ) -> None:
     """Scan and organize ebooks by renaming and moving them."""
     cfg: Config = ctx.obj["config"]
@@ -217,11 +223,20 @@ def organize(
 
     for path in files:
         try:
-            meta = pipeline.process(path)
+            meta = None
+            if sidecar:
+                meta = read_sidecar(path)
+                if meta:
+                    console.print(f"[dim]Using sidecar:[/dim] {path.name}")
+            if meta is None:
+                meta = pipeline.process(path)
             meta.original_path = path
+            meta.extension = path.suffix.lstrip(".")
 
             if meta.confidence >= cfg.confidence_threshold and meta.title:
                 dest = organizer.move_file(meta)
+                if sidecar and not cfg.dry_run:
+                    write_sidecar(meta, dest)
                 action = "DRY RUN" if cfg.dry_run else "Moved"
                 console.print(f"[green]{action}:[/green] {path.name} -> {dest}")
                 organized += 1
