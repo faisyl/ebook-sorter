@@ -39,7 +39,7 @@ def _build_pipeline(cfg: Config) -> Pipeline:
         extractors.append(OcrExtractor(cfg.ocr_first_pages, cfg.ocr_last_pages))
     lookups = [
         OpenLibraryLookup(),
-        GoogleBooksLookup(),
+        GoogleBooksLookup(api_key=cfg.google_books_api_key),
         CalibreLookup(),
     ]
     return Pipeline(extractors=extractors, lookups=lookups)

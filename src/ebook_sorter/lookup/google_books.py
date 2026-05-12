@@ -3,9 +3,8 @@ from __future__ import annotations
 import logging
 import re
 
-import httpx
-
 from ebook_sorter.lookup.base import BaseLookup
+from ebook_sorter.lookup.http import RateLimitedClient
 from ebook_sorter.models import BookMetadata
 
 logger = logging.getLogger(__name__)
@@ -14,8 +13,9 @@ _BASE = "https://www.googleapis.com/books/v1/volumes"
 
 
 class GoogleBooksLookup(BaseLookup):
-    def __init__(self, timeout: float = 15.0) -> None:
-        self._timeout = timeout
+    def __init__(self, timeout: float = 15.0, api_key: str | None = None) -> None:
+        self._client = RateLimitedClient(min_interval=1.0, timeout=timeout)
+        self._api_key = api_key
 
     def lookup_isbn(self, isbn: str) -> BookMetadata | None:
         return self._query(f"isbn:{isbn}", is_isbn_lookup=True)
@@ -28,14 +28,13 @@ class GoogleBooksLookup(BaseLookup):
 
     def _query(self, q: str, is_isbn_lookup: bool) -> BookMetadata | None:
         try:
-            resp = httpx.get(
-                _BASE,
-                params={"q": q, "maxResults": 5},
-                timeout=self._timeout,
-            )
+            params: dict[str, str | int] = {"q": q, "maxResults": 5}
+            if self._api_key:
+                params["key"] = self._api_key
+            resp = self._client.get(_BASE, params=params)
             resp.raise_for_status()
             data = resp.json()
-        except (httpx.HTTPError, ValueError):
+        except Exception:
             logger.debug("Google Books query failed: %s", q, exc_info=True)
             return None
 

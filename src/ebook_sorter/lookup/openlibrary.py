@@ -3,10 +3,9 @@ from __future__ import annotations
 import logging
 import re
 
-import httpx
-
 from ebook_sorter.isbn import find_isbns, is_valid_isbn_13
 from ebook_sorter.lookup.base import BaseLookup
+from ebook_sorter.lookup.http import RateLimitedClient
 from ebook_sorter.models import BookMetadata
 
 logger = logging.getLogger(__name__)
@@ -16,22 +15,21 @@ _BASE = "https://openlibrary.org"
 
 class OpenLibraryLookup(BaseLookup):
     def __init__(self, timeout: float = 15.0) -> None:
-        self._timeout = timeout
+        self._client = RateLimitedClient(min_interval=1.0, timeout=timeout)
 
     def lookup_isbn(self, isbn: str) -> BookMetadata | None:
         try:
-            resp = httpx.get(
+            resp = self._client.get(
                 f"{_BASE}/api/books",
                 params={
                     "bibkeys": f"ISBN:{isbn}",
                     "format": "json",
                     "jscmd": "data",
                 },
-                timeout=self._timeout,
             )
             resp.raise_for_status()
             data = resp.json()
-        except (httpx.HTTPError, ValueError):
+        except Exception:
             logger.debug("Open Library ISBN lookup failed for %s", isbn, exc_info=True)
             return None
 
@@ -47,14 +45,13 @@ class OpenLibraryLookup(BaseLookup):
         if author:
             query = f"{title} {author}"
         try:
-            resp = httpx.get(
+            resp = self._client.get(
                 f"{_BASE}/search.json",
                 params={"q": query, "limit": 5},
-                timeout=self._timeout,
             )
             resp.raise_for_status()
             data = resp.json()
-        except (httpx.HTTPError, ValueError):
+        except Exception:
             logger.debug("Open Library search failed for %s", query, exc_info=True)
             return None
 

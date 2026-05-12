@@ -21,6 +21,7 @@ class Config:
     verbose: bool = False
     corrupt_dir: Path | None = None
     uncertain_dir: Path | None = None
+    google_books_api_key: str | None = None
 
 
 def load_config(path: Path) -> Config:
@@ -57,5 +58,7 @@ def load_config(path: Path) -> Config:
         kwargs["corrupt_dir"] = Path(section["corrupt_dir"])
     if "uncertain_dir" in section:
         kwargs["uncertain_dir"] = Path(section["uncertain_dir"])
+    if "google_books_api_key" in section:
+        kwargs["google_books_api_key"] = section["google_books_api_key"]
 
     return Config(**kwargs)
