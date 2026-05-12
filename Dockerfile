@@ -24,6 +24,20 @@ RUN apt-get update && \
 COPY --from=builder /build/dist/*.whl /tmp/
 RUN pip install --no-cache-dir /tmp/*.whl && rm /tmp/*.whl
 
+RUN apt-get update && apt-get install -y --no-install-recommends gosu && rm -rf /var/lib/apt/lists/*
+
+COPY <<'EOF' /entrypoint.sh
+#!/bin/sh
+if [ -n "$PUID" ] && [ -n "$PGID" ]; then
+    groupadd -o -g "$PGID" ebook 2>/dev/null
+    useradd -o -u "$PUID" -g "$PGID" -m ebook 2>/dev/null
+    exec gosu ebook ebook-sorter "$@"
+else
+    exec ebook-sorter "$@"
+fi
+EOF
+RUN chmod +x /entrypoint.sh
+
 WORKDIR /data
 
-ENTRYPOINT ["ebook-sorter"]
+ENTRYPOINT ["/entrypoint.sh"]
