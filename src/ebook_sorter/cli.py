@@ -85,7 +85,13 @@ def scan(ctx: click.Context, folder: str, sidecar: bool) -> None:
     table.add_column("Confidence", justify="right")
 
     for path in files:
-        meta = pipeline.process(path)
+        meta = None
+        if sidecar:
+            meta = read_sidecar(path)
+        if meta is None:
+            meta = pipeline.process(path)
+            if sidecar:
+                write_sidecar(meta, path)
         table.add_row(
             path.name,
             meta.title or "—",
@@ -93,8 +99,6 @@ def scan(ctx: click.Context, folder: str, sidecar: bool) -> None:
             meta.isbn or "—",
             f"{meta.confidence:.2f}",
         )
-        if sidecar:
-            write_sidecar(meta, path)
 
     console.print(table)
 
