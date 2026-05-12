@@ -11,6 +11,8 @@ RUN pip install --no-cache-dir build && \
 
 FROM python:3.12-slim
 
+LABEL org.opencontainers.image.source="https://github.com/faisyl/ebook-sorter"
+
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         tesseract-ocr \
