@@ -36,9 +36,7 @@ RUN apk del gcc musl-dev libxml2-dev libxslt-dev
 COPY <<'EOF' /entrypoint.sh
 #!/bin/sh
 if [ -n "$PUID" ] && [ -n "$PGID" ]; then
-    addgroup -g "$PGID" ebook 2>/dev/null
-    adduser -u "$PUID" -G ebook -D ebook 2>/dev/null
-    exec su-exec ebook ebook-sorter "$@"
+    exec su-exec "$PUID:$PGID" ebook-sorter "$@"
 else
     exec ebook-sorter "$@"
 fi
