@@ -77,13 +77,6 @@ def scan(ctx: click.Context, folder: str, sidecar: bool) -> None:
     pipeline = _build_pipeline(cfg)
     files = _find_ebooks(Path(folder))
 
-    table = Table(title=f"Scan: {folder}")
-    table.add_column("File", style="cyan")
-    table.add_column("Title")
-    table.add_column("Author(s)")
-    table.add_column("ISBN")
-    table.add_column("Confidence", justify="right")
-
     for path in files:
         meta = None
         if sidecar:
@@ -92,15 +85,15 @@ def scan(ctx: click.Context, folder: str, sidecar: bool) -> None:
             meta = pipeline.process(path)
             if sidecar:
                 write_sidecar(meta, path)
-        table.add_row(
-            path.name,
-            meta.title or "—",
-            ", ".join(meta.authors) if meta.authors else "—",
-            meta.isbn or "—",
-            f"{meta.confidence:.2f}",
+        title = meta.title or "—"
+        authors = ", ".join(meta.authors) if meta.authors else "—"
+        isbn = meta.isbn or "—"
+        console.print(
+            f"[cyan]{path.name}[/cyan]  "
+            f"{title} / {authors}  "
+            f"ISBN: {isbn}  "
+            f"confidence: {meta.confidence:.2f}"
         )
-
-    console.print(table)
 
 
 @cli.command("find-isbn")
