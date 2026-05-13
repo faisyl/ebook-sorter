@@ -40,7 +40,7 @@ class Pipeline:
             if lookup_result:
                 merged = merged.merge(lookup_result)
         elif merged.title:
-            author_str = ", ".join(merged.authors) if merged.authors else ""
+            author_str = ", ".join(a for a in merged.authors if a) if merged.authors else ""
             lookup_result = self._search(merged.title, author_str)
             if lookup_result:
                 merged = merged.merge(lookup_result)

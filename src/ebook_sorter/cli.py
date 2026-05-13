@@ -99,7 +99,7 @@ def scan(ctx: click.Context, folder: str, sidecar: bool) -> None:
 
         console.print(f"[bold cyan]{path}[/bold cyan]")
         console.print(f"  [bold]Title:[/bold]      {meta.title or '—'}")
-        console.print(f"  [bold]Author(s):[/bold]  {', '.join(meta.authors) if meta.authors else '—'}")
+        console.print(f"  [bold]Author(s):[/bold]  {', '.join(a for a in meta.authors if a) if meta.authors else '—'}")
         if meta.isbn:
             console.print(f"  [bold]ISBN:[/bold]       {meta.isbn}")
         if meta.publisher:

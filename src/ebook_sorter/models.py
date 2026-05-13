@@ -61,7 +61,7 @@ class BookMetadata:
 
         return {
             "title": self.title or "",
-            "authors": ", ".join(self.authors) if self.authors else "",
+            "authors": ", ".join(a for a in self.authors if a) if self.authors else "",
             "isbn": self.isbn or "",
             "isbn10": self.isbn_10 or "",
             "isbn13": self.isbn_13 or "",
