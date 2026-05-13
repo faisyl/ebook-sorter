@@ -21,7 +21,7 @@ from ebook_sorter.organizer import Organizer
 from ebook_sorter.pipeline import Pipeline
 from ebook_sorter.sidecar import read_sidecar, sidecar_path, write_sidecar
 
-console = Console()
+console = Console(soft_wrap=True)
 
 EBOOK_EXTENSIONS = {
     ".pdf", ".epub", ".mobi", ".azw", ".azw3",
@@ -77,7 +77,7 @@ def scan(ctx: click.Context, folder: str, sidecar: bool) -> None:
     pipeline = _build_pipeline(cfg)
     files = _find_ebooks(Path(folder))
 
-    for path in files:
+    for i, path in enumerate(files):
         meta = None
         if sidecar:
             meta = read_sidecar(path)
@@ -85,15 +85,36 @@ def scan(ctx: click.Context, folder: str, sidecar: bool) -> None:
             meta = pipeline.process(path)
             if sidecar:
                 write_sidecar(meta, path)
-        title = meta.title or "—"
-        authors = ", ".join(meta.authors) if meta.authors else "—"
-        isbn = meta.isbn or "—"
-        console.print(
-            f"[cyan]{path.name}[/cyan]  "
-            f"{title} / {authors}  "
-            f"ISBN: {isbn}  "
-            f"confidence: {meta.confidence:.2f}"
-        )
+
+        if i > 0:
+            console.print("[dim]───────────────────────────────────────────[/dim]")
+
+        conf = meta.confidence
+        if conf >= 0.8:
+            score_style = "bold green"
+        elif conf >= 0.5:
+            score_style = "yellow"
+        else:
+            score_style = "red"
+
+        console.print(f"[bold cyan]{path}[/bold cyan]")
+        console.print(f"  [bold]Title:[/bold]      {meta.title or '—'}")
+        console.print(f"  [bold]Author(s):[/bold]  {', '.join(meta.authors) if meta.authors else '—'}")
+        if meta.isbn:
+            console.print(f"  [bold]ISBN:[/bold]       {meta.isbn}")
+        if meta.publisher:
+            console.print(f"  [bold]Publisher:[/bold]  {meta.publisher}")
+        if meta.year:
+            console.print(f"  [bold]Year:[/bold]       {meta.year}")
+        if meta.series:
+            series_str = meta.series
+            if meta.series_index is not None:
+                series_str += f" #{int(meta.series_index) if meta.series_index == int(meta.series_index) else meta.series_index}"
+            console.print(f"  [bold]Series:[/bold]     {series_str}")
+        if meta.language:
+            console.print(f"  [bold]Language:[/bold]   {meta.language}")
+        console.print(f"  [bold]Source:[/bold]     {meta.source}")
+        console.print(f"  [bold]Confidence:[/bold] [{score_style}]{conf:.2f}[/{score_style}]")
 
 
 @cli.command("find-isbn")
