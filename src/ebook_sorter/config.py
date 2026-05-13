@@ -25,16 +25,22 @@ class Config:
     google_books_api_key: str | None = None
 
 
+def _apply_env_vars(cfg: Config) -> Config:
+    if not cfg.google_books_api_key:
+        cfg.google_books_api_key = os.environ.get("GOOGLE_BOOKS_API_KEY")
+    return cfg
+
+
 def load_config(path: Path) -> Config:
     if not path.exists():
-        return Config()
+        return _apply_env_vars(Config())
 
     try:
         with open(path, "rb") as f:
             data = tomllib.load(f)
     except Exception:
         logger.warning("Failed to parse config file: %s", path, exc_info=True)
-        return Config()
+        return _apply_env_vars(Config())
 
     section = data.get("ebook-sorter", {})
     kwargs: dict = {}
@@ -62,9 +68,4 @@ def load_config(path: Path) -> Config:
     if "google_books_api_key" in section:
         kwargs["google_books_api_key"] = section["google_books_api_key"]
 
-    cfg = Config(**kwargs)
-
-    if not cfg.google_books_api_key:
-        cfg.google_books_api_key = os.environ.get("GOOGLE_BOOKS_API_KEY")
-
-    return cfg
+    return _apply_env_vars(Config(**kwargs))
