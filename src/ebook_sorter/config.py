@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -61,4 +62,9 @@ def load_config(path: Path) -> Config:
     if "google_books_api_key" in section:
         kwargs["google_books_api_key"] = section["google_books_api_key"]
 
-    return Config(**kwargs)
+    cfg = Config(**kwargs)
+
+    if not cfg.google_books_api_key:
+        cfg.google_books_api_key = os.environ.get("GOOGLE_BOOKS_API_KEY")
+
+    return cfg
