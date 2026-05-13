@@ -1,6 +1,8 @@
-FROM python:3.12-slim AS builder
+FROM python:3.12-alpine AS builder
 
 WORKDIR /build
+
+RUN apk add --no-cache gcc musl-dev libxml2-dev libxslt-dev
 
 COPY pyproject.toml .
 COPY src/ src/
@@ -9,28 +11,34 @@ RUN pip install --no-cache-dir build && \
     python -m build --wheel --outdir /build/dist
 
 
-FROM python:3.12-slim
+FROM python:3.12-alpine
 
 LABEL org.opencontainers.image.source="https://github.com/faisyl/ebook-sorter"
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+RUN apk add --no-cache \
         tesseract-ocr \
-        djvulibre-bin \
-        p7zip-full \
-        calibre \
-        gosu \
-    && rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/*
+        djvulibre \
+        p7zip \
+        su-exec \
+        libxml2 \
+        libxslt \
+        gcc \
+        musl-dev \
+        libxml2-dev \
+        libxslt-dev \
+    && true
 
 COPY --from=builder /build/dist/*.whl /tmp/
 RUN pip install --no-cache-dir /tmp/*.whl && rm /tmp/*.whl
 
+RUN apk del gcc musl-dev libxml2-dev libxslt-dev
+
 COPY <<'EOF' /entrypoint.sh
 #!/bin/sh
 if [ -n "$PUID" ] && [ -n "$PGID" ]; then
-    groupadd -o -g "$PGID" ebook 2>/dev/null
-    useradd -o -u "$PUID" -g "$PGID" -m ebook 2>/dev/null
-    exec gosu ebook ebook-sorter "$@"
+    addgroup -g "$PGID" ebook 2>/dev/null
+    adduser -u "$PUID" -G ebook -D ebook 2>/dev/null
+    exec su-exec ebook ebook-sorter "$@"
 else
     exec ebook-sorter "$@"
 fi
