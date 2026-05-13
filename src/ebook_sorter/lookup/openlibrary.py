@@ -27,6 +27,9 @@ class OpenLibraryLookup(BaseLookup):
                     "jscmd": "data",
                 },
             )
+            if resp.status_code == 429:
+                logger.warning("Open Library rate limited for ISBN: %s", isbn)
+                return None
             resp.raise_for_status()
             data = resp.json()
         except Exception:
@@ -47,8 +50,11 @@ class OpenLibraryLookup(BaseLookup):
         try:
             resp = self._client.get(
                 f"{_BASE}/search.json",
-                params={"q": query, "limit": 5},
+                params={"q": query, "limit": 1},
             )
+            if resp.status_code == 429:
+                logger.warning("Open Library rate limited for search: %s", query)
+                return None
             resp.raise_for_status()
             data = resp.json()
         except Exception:

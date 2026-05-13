@@ -29,10 +29,13 @@ class GoogleBooksLookup(BaseLookup):
 
     def _query(self, q: str, is_isbn_lookup: bool) -> BookMetadata | None:
         try:
-            params: dict[str, str | int] = {"q": q, "maxResults": 5}
+            params: dict[str, str | int] = {"q": q, "maxResults": 1}
             if self._api_key:
                 params["key"] = self._api_key
             resp = self._client.get(_BASE, params=params)
+            if resp.status_code == 429:
+                logger.warning("Google Books rate limited for query: %s", q)
+                return None
             resp.raise_for_status()
             data = resp.json()
         except Exception:
