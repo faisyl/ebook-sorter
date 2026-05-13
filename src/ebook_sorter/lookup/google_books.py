@@ -14,7 +14,8 @@ _BASE = "https://www.googleapis.com/books/v1/volumes"
 
 class GoogleBooksLookup(BaseLookup):
     def __init__(self, timeout: float = 15.0, api_key: str | None = None) -> None:
-        self._client = RateLimitedClient(min_interval=1.0, timeout=timeout)
+        interval = 1.0 if api_key else 3.0
+        self._client = RateLimitedClient(min_interval=interval, timeout=timeout)
         self._api_key = api_key
 
     def lookup_isbn(self, isbn: str) -> BookMetadata | None:

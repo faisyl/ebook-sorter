@@ -9,8 +9,8 @@ logger = logging.getLogger(__name__)
 
 _USER_AGENT = "ebook-sorter/0.1.0 (https://github.com/faisyl/ebook-sorter)"
 
-_MAX_RETRIES = 3
-_BACKOFF_BASE = 1.0
+_MAX_RETRIES = 5
+_BACKOFF_BASE = 2.0
 
 
 class RateLimitedClient:
@@ -31,14 +31,16 @@ class RateLimitedClient:
         kwargs.setdefault("headers", {})
         kwargs["headers"].setdefault("User-Agent", _USER_AGENT)
 
+        resp = None
         for attempt in range(1, _MAX_RETRIES + 1):
             self._throttle()
             try:
                 resp = httpx.get(url, **kwargs)
                 if resp.status_code == 429:
                     retry_after = float(resp.headers.get("Retry-After", _BACKOFF_BASE * attempt))
-                    logger.debug("Rate limited (429), retrying in %.1fs", retry_after)
+                    logger.warning("Rate limited (429) on %s, backing off %.1fs (attempt %d/%d)", url, retry_after, attempt, _MAX_RETRIES)
                     time.sleep(retry_after)
+                    self._min_interval = min(self._min_interval * 2, 30.0)
                     continue
                 if resp.status_code >= 500 and attempt < _MAX_RETRIES:
                     wait = _BACKOFF_BASE * (2 ** (attempt - 1))
