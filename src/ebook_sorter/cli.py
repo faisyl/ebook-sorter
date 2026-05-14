@@ -54,6 +54,7 @@ def _find_ebooks(folder: Path) -> list[Path]:
 
 
 @click.group()
+@click.version_option(package_name="ebook-sorter")
 @click.option("--config", "config_path", type=click.Path(exists=False), default="ebook-sorter.toml")
 @click.option("-v", "--verbose", is_flag=True)
 @click.pass_context

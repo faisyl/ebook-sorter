@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
 name = "ebook-sorter"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Organize ebook collections by extracting metadata and renaming files"
 requires-python = ">=3.11"
 dependencies = [
@@ -25,6 +25,12 @@ dev = [
 
 [project.scripts]
 ebook-sorter = "ebook_sorter.cli:cli"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/ebook_sorter/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ebook_sorter"]

@@ -1,3 +1,6 @@
 """Ebook metadata extraction and organization tool."""
 
-__version__ = "0.1.0"
+try:
+    from ebook_sorter._version import __version__
+except ModuleNotFoundError:
+    __version__ = "0.0.0-dev"

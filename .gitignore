@@ -5,3 +5,4 @@ __pycache__/
 dist/
 build/
 .pytest_cache/
+src/ebook_sorter/_version.py
