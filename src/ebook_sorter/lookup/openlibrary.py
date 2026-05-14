@@ -14,7 +14,7 @@ _BASE = "https://openlibrary.org"
 
 
 class OpenLibraryLookup(BaseLookup):
-    def __init__(self, timeout: float = 15.0) -> None:
+    def __init__(self, timeout: float = 30.0) -> None:
         self._client = RateLimitedClient(min_interval=1.0, timeout=timeout)
 
     def lookup_isbn(self, isbn: str) -> BookMetadata | None:

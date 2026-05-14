@@ -15,6 +15,7 @@ from ebook_sorter.extractors.text_content import TextContentExtractor
 from ebook_sorter.isbn import find_isbns
 from ebook_sorter.lookup.calibre import CalibreLookup
 from ebook_sorter.lookup.google_books import GoogleBooksLookup
+from ebook_sorter.lookup.isbnlib_lookup import IsbnlibLookup
 from ebook_sorter.lookup.openlibrary import OpenLibraryLookup
 from ebook_sorter.models import BookMetadata
 from ebook_sorter.organizer import Organizer
@@ -38,6 +39,7 @@ def _build_pipeline(cfg: Config) -> Pipeline:
     if cfg.ocr_enabled:
         extractors.append(OcrExtractor(cfg.ocr_first_pages, cfg.ocr_last_pages))
     lookups = [
+        IsbnlibLookup(),
         OpenLibraryLookup(),
         GoogleBooksLookup(api_key=cfg.google_books_api_key),
         CalibreLookup(),
