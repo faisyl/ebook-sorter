@@ -54,6 +54,8 @@ jobs:
           push: true
           tags: ${{ steps.meta-full.outputs.tags }}
           labels: ${{ steps.meta-full.outputs.labels }}
+          build-args: |
+            SETUPTOOLS_SCM_PRETEND_VERSION=${{ steps.meta-full.outputs.version }}
 
       - name: Build and push (slim)
         uses: docker/build-push-action@v6
@@ -63,3 +65,5 @@ jobs:
           push: true
           tags: ${{ steps.meta-slim.outputs.tags }}
           labels: ${{ steps.meta-slim.outputs.labels }}
+          build-args: |
+            SETUPTOOLS_SCM_PRETEND_VERSION=${{ steps.meta-full.outputs.version }}

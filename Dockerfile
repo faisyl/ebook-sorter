@@ -1,11 +1,15 @@
 FROM python:3.12-slim AS builder
 
+ARG SETUPTOOLS_SCM_PRETEND_VERSION=0.0.0
+
 WORKDIR /build
 
 COPY pyproject.toml .
 COPY src/ src/
 
-RUN pip install --no-cache-dir build && \
+RUN SETUPTOOLS_SCM_PRETEND_VERSION=${SETUPTOOLS_SCM_PRETEND_VERSION} \
+    pip install --no-cache-dir build && \
+    SETUPTOOLS_SCM_PRETEND_VERSION=${SETUPTOOLS_SCM_PRETEND_VERSION} \
     python -m build --wheel --outdir /build/dist
 
 
