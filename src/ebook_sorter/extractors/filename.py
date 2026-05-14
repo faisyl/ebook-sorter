@@ -7,8 +7,8 @@ from ebook_sorter.extractors.base import BaseExtractor
 from ebook_sorter.isbn import find_isbns, is_valid_isbn_13
 from ebook_sorter.models import BookMetadata
 
-_YEAR_RE = re.compile(r"\((\d{4})\)")
-_SERIES_RE = re.compile(r"\[([^\]]+?)(?:\s*#(\d+(?:\.\d+)?))?\]")
+_YEAR_RE = re.compile(r"\((\d{4})(?:\b[^)]*)?\)")
+_SERIES_RE = re.compile(r"\[([^\]]+?)(?:\s*#?\s*(\d+(?:\.\d+)?))?\s*\]")
 
 
 class FilenameExtractor(BaseExtractor):
