@@ -56,42 +56,4 @@ class IsbnlibLookup(BaseLookup):
         )
 
     def search(self, title: str, author: str = "") -> BookMetadata | None:
-        if not _AVAILABLE:
-            return None
-        try:
-            query = title
-            if author:
-                query = f"{title} {author}"
-            results = isbnlib.goom(query)
-        except Exception:
-            logger.debug("isbnlib goom failed for %s", title, exc_info=True)
-            return None
-
-        if not results:
-            return None
-
-        hit = results[0]
-        authors = hit.get("Authors", [])
-        if isinstance(authors, str):
-            authors = [authors]
-
-        year = None
-        pub_date = hit.get("Year", "")
-        if pub_date and pub_date.isdigit():
-            year = int(pub_date)
-
-        isbn_13 = None
-        raw_isbn = hit.get("ISBN-13", "")
-        if raw_isbn and len(raw_isbn) == 13:
-            isbn_13 = raw_isbn
-
-        return BookMetadata(
-            title=hit.get("Title"),
-            authors=authors,
-            isbn_13=isbn_13,
-            publisher=hit.get("Publisher"),
-            year=year,
-            language=hit.get("Language"),
-            source="isbnlib",
-            confidence=0.7,
-        )
+        return None
