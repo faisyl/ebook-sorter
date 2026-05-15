@@ -1,6 +1,0 @@
-
-[ebook-sorter]
-output_dir = "/tmp/output"
-filename_template = "{title}.{ext}"
-confidence_threshold = 0.8
-ocr_enabled = true
