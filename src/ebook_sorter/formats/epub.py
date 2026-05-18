@@ -1,10 +1,62 @@
 from __future__ import annotations
 
 import html.parser
+import xml.etree.ElementTree as ET
+import zipfile
 from pathlib import Path
 
 import ebooklib
 from ebooklib import epub
+
+_DC = "http://purl.org/dc/elements/1.1/"
+_CONTAINER_PATH = "META-INF/container.xml"
+
+
+def _opf_path_from_zip(zf: zipfile.ZipFile) -> str | None:
+    try:
+        data = zf.read(_CONTAINER_PATH)
+        root = ET.fromstring(data)
+        ns = {"c": "urn:oasis:names:tc:opendocument:xmlns:container"}
+        rf = root.find(".//c:rootfile", ns)
+        return rf.get("full-path") if rf is not None else None
+    except Exception:
+        return None
+
+
+def _metadata_from_zip(path: Path) -> dict[str, object]:
+    with zipfile.ZipFile(str(path), "r") as zf:
+        opf_path = _opf_path_from_zip(zf)
+        if opf_path is None:
+            return {"title": "", "authors": [], "identifiers": [], "publisher": "", "language": ""}
+        root = ET.fromstring(zf.read(opf_path))
+        def dc(tag: str) -> list[str]:
+            return [el.text or "" for el in root.iter(f"{{{_DC}}}{tag}")]
+        titles = dc("title")
+        authors = dc("creator")
+        identifiers = dc("identifier")
+        publishers = dc("publisher")
+        languages = dc("language")
+    return {
+        "title": titles[0] if titles else "",
+        "authors": authors,
+        "identifiers": identifiers,
+        "publisher": publishers[0] if publishers else "",
+        "language": languages[0] if languages else "",
+    }
+
+
+def _text_from_zip(path: Path) -> str:
+    parts: list[str] = []
+    with zipfile.ZipFile(str(path), "r") as zf:
+        for name in zf.namelist():
+            if name.lower().endswith((".html", ".xhtml", ".htm")):
+                try:
+                    text = _html_to_text(zf.read(name))
+                    if text.strip():
+                        parts.append(text)
+                except Exception:
+                    pass
+    return "\n".join(parts)
 
 
 class _TextExtractor(html.parser.HTMLParser):
@@ -28,7 +80,10 @@ def _html_to_text(content: bytes) -> str:
 def extract_metadata(path: Path) -> dict[str, object]:
     if not path.exists():
         raise FileNotFoundError(f"File not found: {path}")
-    book = epub.read_epub(str(path), options={"ignore_ncx": True})
+    try:
+        book = epub.read_epub(str(path), options={"ignore_ncx": True})
+    except KeyError:
+        return _metadata_from_zip(path)
 
     title_entries = book.get_metadata("DC", "title")
     title = title_entries[0][0] if title_entries else ""
@@ -57,7 +112,10 @@ def extract_metadata(path: Path) -> dict[str, object]:
 def extract_text(path: Path) -> str:
     if not path.exists():
         raise FileNotFoundError(f"File not found: {path}")
-    book = epub.read_epub(str(path), options={"ignore_ncx": True})
+    try:
+        book = epub.read_epub(str(path), options={"ignore_ncx": True})
+    except KeyError:
+        return _text_from_zip(path)
     parts: list[str] = []
     for item in book.get_items_of_type(ebooklib.ITEM_DOCUMENT):
         text = _html_to_text(item.get_content())
