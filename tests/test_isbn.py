@@ -1,8 +1,11 @@
 from ebook_sorter.isbn import (
     find_isbns,
+    find_isbns_prefixed,
+    find_isbns_with_context,
     is_valid_isbn_10,
     is_valid_isbn_13,
     isbn_10_to_13,
+    isbn_13_to_10,
     normalize_isbn,
 )
 
@@ -101,3 +104,73 @@ class TestFindIsbns:
     def test_isbn_at_end_of_text(self):
         text = "The ISBN is 9780765319852"
         assert "9780765319852" in find_isbns(text)
+
+
+class TestFindIsbnsPrefixed:
+    def test_finds_prefixed_isbn(self):
+        text = "ISBN 978-0-7653-1985-2, also see 1234567890"
+        result = find_isbns_prefixed(text)
+        assert "9780765319852" in result
+        assert "1234567890" not in result  # bare number without prefix
+
+    def test_prefixed_isbn_all_formats(self):
+        text = "ISBN: 9780765319852 and ISBN-10: 0765319853 and ISBN-13: 9780765319852"
+        result = find_isbns_prefixed(text)
+        assert "9780765319852" in result
+        assert "0765319853" in result
+
+    def test_no_prefixed_no_match(self):
+        text = "Just a number 9780765319852 without label"
+        assert find_isbns_prefixed(text) == []
+
+    def test_empty_text(self):
+        assert find_isbns_prefixed("") == []
+
+
+class TestFindIsbnsWithContext:
+    def test_prefixed_and_bare_separated(self):
+        text = "ISBN 9780765319852 is real, but 1292057696 might not be"
+        prefixed, bare = find_isbns_with_context(text)
+        assert "9780765319852" in prefixed
+        assert "1292057696" in bare
+
+    def test_prefixed_only(self):
+        text = "ISBN-10: 0765319853"
+        prefixed, bare = find_isbns_with_context(text)
+        assert "0765319853" in prefixed
+        assert bare == []
+
+    def test_bare_only(self):
+        text = "Found number 9780765319852 in the wild"
+        prefixed, bare = find_isbns_with_context(text)
+        assert "9780765319852" in bare
+        assert prefixed == []
+
+    def test_no_isbns(self):
+        text = "No numbers here at all"
+        prefixed, bare = find_isbns_with_context(text)
+        assert prefixed == []
+        assert bare == []
+
+    def test_deduplicates_across_groups(self):
+        text = "ISBN 9780765319852 and bare 9780765319852"
+        prefixed, bare = find_isbns_with_context(text)
+        assert "9780765319852" in prefixed
+        assert "9780765319852" not in bare  # deduplicated from bare
+
+    def test_orders_preserved(self):
+        text = "bare 1292057696 then ISBN 9780765319852 then bare 0765319853"
+        prefixed, bare = find_isbns_with_context(text)
+        assert bare == ["1292057696", "0765319853"]
+        assert prefixed == ["9780765319852"]
+
+
+class TestIsbn13To10:
+    def test_converts_978(self):
+        assert isbn_13_to_10("9780765319852") == "0765319853"
+
+    def test_returns_none_for_979(self):
+        assert isbn_13_to_10("9791032305690") is None
+
+    def test_returns_none_wrong_length(self):
+        assert isbn_13_to_10("978076531985") is None
