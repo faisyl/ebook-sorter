@@ -84,9 +84,13 @@ class EmbeddedExtractor(BaseExtractor):
         for ident in raw.get("identifiers", []):
             for found in find_isbns(str(ident)):
                 if len(found) == 13 and is_valid_isbn_13(found):
-                    isbn_13 = found
+                    if isbn_13 is None:
+                        isbn_13 = found
                 elif len(found) == 10:
-                    isbn_10 = found
+                    if isbn_10 is None:
+                        isbn_10 = found
+                if isbn_13 is not None and isbn_10 is not None:
+                    break
 
         return BookMetadata(
             title=title,
