@@ -1,10 +1,12 @@
+"""Extract ISBNs from text content of ebook files."""
+
 from __future__ import annotations
 
 import logging
 from pathlib import Path
 
 from ebook_sorter.extractors.base import BaseExtractor
-from ebook_sorter.isbn import find_isbns, is_valid_isbn_13
+from ebook_sorter.isbn import find_isbns, find_isbns_with_context, is_valid_isbn_13
 from ebook_sorter.models import BookMetadata
 
 logger = logging.getLogger(__name__)
@@ -39,20 +41,49 @@ class TextContentExtractor(BaseExtractor):
         except Exception:
             logger.debug("Text extraction failed for %s", path, exc_info=True)
 
-        isbns = find_isbns(text)
+        # Extract ISBNs, separating high-confidence (prefixed with "ISBN")
+        # from bare matches that could be false positives.
+        prefixed_isbns, bare_isbns = find_isbns_with_context(text)
+
         isbn_10 = None
         isbn_13 = None
-        for isbn in isbns:
+        confidence = 0.0
+
+        # Prefer ISBN-prefixed matches (copyright page) — they appear first in text
+        for isbn in prefixed_isbns:
             if len(isbn) == 13 and is_valid_isbn_13(isbn):
-                isbn_13 = isbn
+                if isbn_13 is None:
+                    isbn_13 = isbn
             elif len(isbn) == 10:
-                isbn_10 = isbn
+                if isbn_10 is None:
+                    isbn_10 = isbn
+            if isbn_13 is not None and isbn_10 is not None:
+                break
+
+        if isbn_13 or isbn_10:
+            confidence = 0.6
+        else:
+            # No prefixed ISBNs found — fall back to bare unordered matches.
+            # These are likely false positives (page numbers, years, etc.)
+            # but we try the FIRST few to see if any are real.
+            for isbn in bare_isbns[:3]:
+                if len(isbn) == 13 and is_valid_isbn_13(isbn):
+                    if isbn_13 is None:
+                        isbn_13 = isbn
+                elif len(isbn) == 10:
+                    if isbn_10 is None:
+                        isbn_10 = isbn
+                if isbn_13 is not None and isbn_10 is not None:
+                    break
+
+            if isbn_13 or isbn_10:
+                confidence = 0.3
 
         return BookMetadata(
             isbn_10=isbn_10,
             isbn_13=isbn_13,
             extension=ext.lstrip("."),
             source="text_content",
-            confidence=0.5 if (isbn_10 or isbn_13) else 0.0,
+            confidence=confidence,
             original_path=path,
         )

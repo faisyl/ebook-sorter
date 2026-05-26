@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 
 from ebook_sorter.extractors.base import BaseExtractor
+from ebook_sorter.isbn import isbn_10_to_13, isbn_13_to_10
 from ebook_sorter.lookup.base import BaseLookup
 from ebook_sorter.models import BookMetadata
 
@@ -35,8 +36,7 @@ class Pipeline:
                 )
 
         if merged.has_isbn:
-            isbn = merged.isbn
-            lookup_result = self._lookup_isbn(isbn)
+            lookup_result = self._try_isbn_lookups(merged)
             if lookup_result:
                 merged = merged.merge(lookup_result)
         elif merged.title:
@@ -76,4 +76,38 @@ class Pipeline:
                     author,
                     exc_info=True,
                 )
+        return None
+
+    def _try_isbn_lookups(self, meta: BookMetadata) -> BookMetadata | None:
+        """Try all available ISBN candidates from metadata, return first match.
+
+        Tries ISBN-13 first, then ISBN-10, then derived conversions.
+        """
+        candidates: list[str] = []
+
+        if meta.isbn_13:
+            candidates.append(meta.isbn_13)
+        if meta.isbn_10:
+            candidates.append(meta.isbn_10)
+        if meta.isbn_10:
+            converted = isbn_10_to_13(meta.isbn_10)
+            if converted not in candidates:
+                candidates.append(converted)
+        if meta.isbn_13:
+            # Derive ISBN-10 from ISBN-13 by dropping the 978/979 prefix and
+            # recalculating the check digit. Only works for 978-prefixed ISBN-13s.
+            derived_10 = isbn_13_to_10(meta.isbn_13)
+            if derived_10 and derived_10 not in candidates:
+                candidates.append(derived_10)
+
+        for isbn in candidates:
+            result = self._lookup_isbn(isbn)
+            if result and result.title:
+                logger.debug(
+                    "ISBN lookup succeeded for %s (candidate from %s)",
+                    isbn,
+                    meta.source,
+                )
+                return result
+
         return None
