@@ -13,6 +13,7 @@ _SIDECAR_SUFFIX = ".metadata.json"
 _SERIALIZED_FIELDS = (
     "title", "authors", "isbn_10", "isbn_13", "publisher",
     "year", "series", "series_index", "language", "source", "confidence",
+    "author_sort",
 )
 
 
@@ -56,4 +57,5 @@ def read_sidecar(ebook_path: Path) -> BookMetadata | None:
         language=data.get("language"),
         source=data.get("source", "sidecar"),
         confidence=data.get("confidence", 0.0),
+        author_sort=data.get("author_sort"),
     )
