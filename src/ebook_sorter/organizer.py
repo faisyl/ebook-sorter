@@ -41,11 +41,14 @@ class Organizer:
 
     def render_path(self, meta: BookMetadata) -> Path:
         d = meta.template_dict()
-        folder = ""
+        segments = []
         if self.folder_template:
-            folder = _sanitize(self.folder_template.format_map(d))
+            for segment in self.folder_template.split("/"):
+                rendered = _sanitize(segment.format_map(d))
+                if rendered:
+                    segments.append(rendered)
         filename = self.render_filename(meta)
-        return self.output_dir / folder / filename if folder else self.output_dir / filename
+        return self.output_dir.joinpath(*segments, filename)
 
     def move_file(self, meta: BookMetadata) -> Path:
         dest = self.render_path(meta)
