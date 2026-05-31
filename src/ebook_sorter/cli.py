@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from copy import copy
 from pathlib import Path
 
 import click
@@ -53,6 +54,66 @@ def _find_ebooks(folder: Path) -> list[Path]:
     return files
 
 
+def _group_by_stem(files: list[Path]) -> dict[tuple[Path, str], list[Path]]:
+    groups: dict[tuple[Path, str], list[Path]] = {}
+    for f in files:
+        key = (f.parent, f.stem)
+        groups.setdefault(key, []).append(f)
+    return groups
+
+
+def _process_stem_group(
+    paths: list[Path],
+    pipeline: Pipeline,
+    use_sidecar: bool = True,
+) -> dict[Path, BookMetadata]:
+    """Extract metadata for each path in a same-stem group, merge across siblings."""
+    sidecar_results = {p: (read_sidecar(p) if use_sidecar else None) for p in paths}
+
+    if use_sidecar and all(v is not None for v in sidecar_results.values()):
+        result = {}
+        for path, meta in sidecar_results.items():
+            console.print(f"[dim]Using sidecar:[/dim] {path.name}")
+            meta.original_path = path
+            meta.extension = path.suffix.lstrip(".")
+            result[path] = meta
+        return result
+
+    per_path: dict[Path, BookMetadata] = {}
+    for path in paths:
+        meta = sidecar_results[path]
+        if meta is None:
+            meta = pipeline.process(path)
+        else:
+            console.print(f"[dim]Using sidecar:[/dim] {path.name}")
+        meta.original_path = path
+        meta.extension = path.suffix.lstrip(".")
+        per_path[path] = meta
+
+    if len(per_path) == 1:
+        return per_path
+
+    combined = BookMetadata()
+    for m in per_path.values():
+        combined = combined.merge(m)
+
+    result = {}
+    for path in paths:
+        m = copy(combined)
+        m.original_path = path
+        m.extension = path.suffix.lstrip(".")
+        result[path] = m
+    return result
+
+
+def _resolve_author_sort(meta: BookMetadata, cfg: Config) -> None:
+    """Set meta.author_sort from config overrides if not already set."""
+    if not meta.author_sort and meta.series:
+        override = cfg.series_author_sort.get(meta.series)
+        if override:
+            meta.author_sort = override
+
+
 @click.group()
 @click.version_option(package_name="ebook-sorter")
 @click.option("--config", "config_path", type=click.Path(exists=False), default="ebook-sorter.toml")
@@ -78,14 +139,20 @@ def scan(ctx: click.Context, folder: str, sidecar: bool) -> None:
     pipeline = _build_pipeline(cfg)
     files = _find_ebooks(Path(folder))
 
+    groups = _group_by_stem(files)
+    meta_map: dict[Path, BookMetadata] = {}
+    for group_paths in groups.values():
+        meta_map.update(_process_stem_group(group_paths, pipeline, use_sidecar=sidecar))
+
+    if sidecar:
+        for path, meta in meta_map.items():
+            write_sidecar(meta, path)
+
+    for meta in meta_map.values():
+        _resolve_author_sort(meta, cfg)
+
     for i, path in enumerate(files):
-        meta = None
-        if sidecar:
-            meta = read_sidecar(path)
-        if meta is None:
-            meta = pipeline.process(path)
-            if sidecar:
-                write_sidecar(meta, path)
+        meta = meta_map[path]
 
         if i > 0:
             console.print("[dim]───────────────────────────────────────────[/dim]")
@@ -240,17 +307,16 @@ def organize(
     uncertain = 0
     failed = 0
 
+    groups = _group_by_stem(files)
+    meta_map: dict[Path, BookMetadata] = {}
+    for group_paths in groups.values():
+        meta_map.update(_process_stem_group(group_paths, pipeline, use_sidecar=sidecar))
+    for meta in meta_map.values():
+        _resolve_author_sort(meta, cfg)
+
     for path in files:
         try:
-            meta = None
-            if sidecar:
-                meta = read_sidecar(path)
-                if meta:
-                    console.print(f"[dim]Using sidecar:[/dim] {path.name}")
-            if meta is None:
-                meta = pipeline.process(path)
-            meta.original_path = path
-            meta.extension = path.suffix.lstrip(".")
+            meta = meta_map[path]
 
             if meta.confidence >= cfg.confidence_threshold and meta.title:
                 dest = organizer.move_file(meta)
@@ -321,9 +387,15 @@ def interactive(
     files = _find_ebooks(Path(folder))
     uncertain: list[tuple[Path, BookMetadata]] = []
 
+    groups = _group_by_stem(files)
+    meta_map: dict[Path, BookMetadata] = {}
+    for group_paths in groups.values():
+        meta_map.update(_process_stem_group(group_paths, pipeline, use_sidecar=False))
+    for meta in meta_map.values():
+        _resolve_author_sort(meta, cfg)
+
     for path in files:
-        meta = pipeline.process(path)
-        meta.original_path = path
+        meta = meta_map[path]
         uncertain.append((path, meta))
 
     if not uncertain:

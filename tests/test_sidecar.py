@@ -110,3 +110,39 @@ class TestReadSidecar:
         assert loaded.series == "Little Brother"
         assert loaded.series_index == 2.0
         assert loaded.language == "en"
+
+    def test_round_trip_with_author_sort(self, tmp_path: Path):
+        ebook = tmp_path / "book.epub"
+        ebook.write_text("fake")
+        meta = BookMetadata(
+            title="Leviathan Wakes",
+            authors=["James S.A. Corey"],
+            author_sort="Corey, James S.A.",
+            series="The Expanse",
+            series_index=1,
+            confidence=0.9,
+        )
+        write_sidecar(meta, ebook)
+        loaded = read_sidecar(ebook)
+        assert loaded is not None
+        assert loaded.author_sort == "Corey, James S.A."
+
+    def test_round_trip_author_sort_none_is_omitted(self, tmp_path: Path):
+        ebook = tmp_path / "book.epub"
+        ebook.write_text("fake")
+        meta = BookMetadata(title="Test", authors=["Author"], confidence=0.8)
+        write_sidecar(meta, ebook)
+        import json
+        data = json.loads((tmp_path / "book.epub.metadata.json").read_text())
+        assert "author_sort" not in data  # not written when None
+
+    def test_old_sidecar_without_author_sort_reads_as_none(self, tmp_path: Path):
+        ebook = tmp_path / "book.epub"
+        ebook.write_text("fake")
+        import json
+        (tmp_path / "book.epub.metadata.json").write_text(
+            json.dumps({"title": "Old Book", "authors": ["Author"], "confidence": 0.8})
+        )
+        loaded = read_sidecar(ebook)
+        assert loaded is not None
+        assert loaded.author_sort is None

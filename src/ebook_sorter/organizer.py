@@ -13,7 +13,9 @@ _UNSAFE_CHARS = re.compile(r'[<>:"/\\|?*]')
 
 
 def _sanitize(name: str) -> str:
-    return _UNSAFE_CHARS.sub("_", name).strip(". ")
+    # Strip leading dots/spaces (avoids hidden-file names); strip trailing spaces only,
+    # not dots — trailing dots appear in abbreviations like "S.A." and are valid on Linux/macOS.
+    return _UNSAFE_CHARS.sub("_", name).lstrip(". ").rstrip(" ")
 
 
 class Organizer:
