@@ -4,6 +4,18 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
+def _derive_author_sort(name: str) -> str:
+    """Convert 'First Last' to 'Last, First'. Already-inverted names are returned as-is."""
+    if not name:
+        return name
+    if "," in name:
+        return name
+    parts = name.rsplit(" ", 1)
+    if len(parts) == 1:
+        return name
+    return f"{parts[1]}, {parts[0]}"
+
+
 @dataclass
 class BookMetadata:
     title: str | None = None
@@ -19,6 +31,7 @@ class BookMetadata:
     confidence: float = 0.0
     original_path: Path | None = None
     extension: str = ""
+    author_sort: str | None = None
 
     @property
     def isbn(self) -> str | None:
@@ -50,14 +63,24 @@ class BookMetadata:
             confidence=max(self.confidence, other.confidence),
             original_path=self.original_path or other.original_path,
             extension=self.extension or other.extension,
+            author_sort=self.author_sort or other.author_sort,
         )
 
     def template_dict(self) -> dict[str, str]:
         si = self.series_index
         if si is not None:
             series_index_str = str(int(si)) if si == int(si) else str(si)
+            series_index_padded = f"{int(si):02d}" if si == int(si) else series_index_str
         else:
             series_index_str = ""
+            series_index_padded = ""
+
+        if self.author_sort:
+            author_sort_str = self.author_sort
+        elif self.authors:
+            author_sort_str = _derive_author_sort(next((a for a in self.authors if a), ""))
+        else:
+            author_sort_str = ""
 
         return {
             "title": self.title or "",
@@ -69,6 +92,8 @@ class BookMetadata:
             "year": str(self.year) if self.year else "",
             "series": self.series or "",
             "series_index": series_index_str,
+            "series_index_padded": series_index_padded,
             "language": self.language or "",
             "ext": self.extension,
+            "author_sort": author_sort_str,
         }

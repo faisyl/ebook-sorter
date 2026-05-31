@@ -60,6 +60,54 @@ class TestRenderPath:
         result = organizer.render_path(meta)
         assert result == Path("/output/Cory Doctorow/Little Brother.pdf")
 
+    def test_nested_folder_template_with_series(self):
+        organizer = Organizer(
+            output_dir=Path("/output"),
+            filename_template="{title}.{ext}",
+            folder_template="{author_sort}/{series}",
+        )
+        meta = BookMetadata(
+            title="Leviathan Wakes",
+            authors=["James S.A. Corey"],
+            author_sort="Corey, James S.A.",
+            series="The Expanse",
+            extension="epub",
+        )
+        result = organizer.render_path(meta)
+        assert result == Path("/output/Corey, James S.A./The Expanse/Leviathan Wakes.epub")
+
+    def test_nested_folder_template_skips_empty_series(self):
+        organizer = Organizer(
+            output_dir=Path("/output"),
+            filename_template="{title}.{ext}",
+            folder_template="{author_sort}/{series}",
+        )
+        meta = BookMetadata(
+            title="American Gods",
+            authors=["Neil Gaiman"],
+            extension="epub",
+        )
+        result = organizer.render_path(meta)
+        # series is empty → segment skipped → single author_sort directory
+        assert result == Path("/output/Gaiman, Neil/American Gods.epub")
+
+    def test_nested_folder_three_levels(self):
+        organizer = Organizer(
+            output_dir=Path("/output"),
+            filename_template="{title}.{ext}",
+            folder_template="{author_sort}/{series}/{year}",
+        )
+        meta = BookMetadata(
+            title="Leviathan Wakes",
+            authors=["James S.A. Corey"],
+            author_sort="Corey, James S.A.",
+            series="The Expanse",
+            year=2011,
+            extension="epub",
+        )
+        result = organizer.render_path(meta)
+        assert result == Path("/output/Corey, James S.A./The Expanse/2011/Leviathan Wakes.epub")
+
 
 class TestMoveFile:
     def test_move_file(self, tmp_path: Path):

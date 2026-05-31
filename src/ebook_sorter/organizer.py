@@ -13,7 +13,9 @@ _UNSAFE_CHARS = re.compile(r'[<>:"/\\|?*]')
 
 
 def _sanitize(name: str) -> str:
-    return _UNSAFE_CHARS.sub("_", name).strip(". ")
+    # Strip leading dots/spaces (avoids hidden-file names); strip trailing spaces only,
+    # not dots — trailing dots appear in abbreviations like "S.A." and are valid on Linux/macOS.
+    return _UNSAFE_CHARS.sub("_", name).lstrip(". ").rstrip(" ")
 
 
 class Organizer:
@@ -41,11 +43,14 @@ class Organizer:
 
     def render_path(self, meta: BookMetadata) -> Path:
         d = meta.template_dict()
-        folder = ""
+        segments = []
         if self.folder_template:
-            folder = _sanitize(self.folder_template.format_map(d))
+            for segment in self.folder_template.split("/"):
+                rendered = _sanitize(segment.format_map(d))
+                if rendered:
+                    segments.append(rendered)
         filename = self.render_filename(meta)
-        return self.output_dir / folder / filename if folder else self.output_dir / filename
+        return self.output_dir.joinpath(*segments, filename)
 
     def move_file(self, meta: BookMetadata) -> Path:
         dest = self.render_path(meta)

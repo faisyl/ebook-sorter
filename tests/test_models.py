@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from ebook_sorter.models import BookMetadata
+from ebook_sorter.models import BookMetadata, _derive_author_sort
 
 
 def test_book_metadata_defaults():
@@ -107,3 +107,71 @@ def test_template_dict_missing_fields_are_empty():
     assert d["authors"] == ""
     assert d["year"] == ""
     assert d["isbn"] == ""
+
+
+class TestDeriveAuthorSort:
+    def test_first_last(self):
+        assert _derive_author_sort("Neil Gaiman") == "Gaiman, Neil"
+
+    def test_already_inverted(self):
+        assert _derive_author_sort("Gaiman, Neil") == "Gaiman, Neil"
+
+    def test_middle_initial(self):
+        assert _derive_author_sort("James S.A. Corey") == "Corey, James S.A."
+
+    def test_single_word(self):
+        assert _derive_author_sort("Homer") == "Homer"
+
+    def test_empty(self):
+        assert _derive_author_sort("") == ""
+
+
+class TestAuthorSortTemplateVar:
+    def test_auto_derived_from_author(self):
+        meta = BookMetadata(authors=["Neil Gaiman"], extension="epub")
+        d = meta.template_dict()
+        assert d["author_sort"] == "Gaiman, Neil"
+
+    def test_explicit_author_sort_overrides_derivation(self):
+        meta = BookMetadata(authors=["Neil Gaiman"], author_sort="Gaiman, Neil A.", extension="epub")
+        d = meta.template_dict()
+        assert d["author_sort"] == "Gaiman, Neil A."
+
+    def test_empty_when_no_authors(self):
+        meta = BookMetadata()
+        d = meta.template_dict()
+        assert d["author_sort"] == ""
+
+    def test_merge_preserves_author_sort(self):
+        base = BookMetadata(author_sort="Corey, James S.A.")
+        other = BookMetadata(title="Leviathan Wakes", confidence=0.9)
+        merged = base.merge(other)
+        assert merged.author_sort == "Corey, James S.A."
+
+    def test_merge_fills_missing_author_sort(self):
+        base = BookMetadata(title="Leviathan Wakes")
+        other = BookMetadata(author_sort="Corey, James S.A.", confidence=0.9)
+        merged = base.merge(other)
+        assert merged.author_sort == "Corey, James S.A."
+
+
+class TestSeriesIndexPadded:
+    def test_single_digit_padded(self):
+        meta = BookMetadata(series_index=1.0)
+        d = meta.template_dict()
+        assert d["series_index_padded"] == "01"
+
+    def test_double_digit_unchanged(self):
+        meta = BookMetadata(series_index=10.0)
+        d = meta.template_dict()
+        assert d["series_index_padded"] == "10"
+
+    def test_empty_when_no_series_index(self):
+        meta = BookMetadata()
+        d = meta.template_dict()
+        assert d["series_index_padded"] == ""
+
+    def test_float_index_uses_raw_string(self):
+        meta = BookMetadata(series_index=1.5)
+        d = meta.template_dict()
+        assert d["series_index_padded"] == "1.5"
