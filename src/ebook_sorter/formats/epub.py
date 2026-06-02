@@ -82,7 +82,7 @@ def extract_metadata(path: Path) -> dict[str, object]:
         raise FileNotFoundError(f"File not found: {path}")
     try:
         book = epub.read_epub(str(path), options={"ignore_ncx": True})
-    except KeyError:
+    except (KeyError, AttributeError):
         return _metadata_from_zip(path)
 
     title_entries = book.get_metadata("DC", "title")
@@ -114,7 +114,7 @@ def extract_text(path: Path) -> str:
         raise FileNotFoundError(f"File not found: {path}")
     try:
         book = epub.read_epub(str(path), options={"ignore_ncx": True})
-    except KeyError:
+    except (KeyError, AttributeError):
         return _text_from_zip(path)
     parts: list[str] = []
     for item in book.get_items_of_type(ebooklib.ITEM_DOCUMENT):
