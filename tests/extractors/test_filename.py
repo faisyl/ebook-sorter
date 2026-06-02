@@ -52,6 +52,23 @@ class TestFilenameExtractor:
         assert meta.series_index == 1.0
         assert meta.title == "Title"
 
+    def test_isbn_bracket_not_parsed_as_series(self):
+        path = make_path("Cory Doctorow - Little Brother (2008) [9780765319852].epub")
+        meta = self.extractor.extract(path)
+        assert meta.series is None
+        assert meta.series_index is None
+        assert meta.isbn_13 == "9780765319852"
+
+    def test_isbn_bracket_with_hyphens_not_parsed_as_series(self):
+        path = make_path("Author - Title [978-0-7653-1985-2].epub")
+        meta = self.extractor.extract(path)
+        assert meta.series is None
+
+    def test_bare_number_bracket_not_parsed_as_series(self):
+        path = make_path("Author - Title [9].epub")
+        meta = self.extractor.extract(path)
+        assert meta.series is None
+
     def test_source_is_filename(self):
         path = make_path("book.pdf")
         meta = self.extractor.extract(path)

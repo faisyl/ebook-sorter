@@ -7,7 +7,7 @@ def test_config_defaults():
     cfg = Config()
     assert cfg.output_dir == Path(".")
     assert cfg.filename_template == "{authors} - {title} ({year}) [{isbn}].{ext}"
-    assert cfg.folder_template == "{authors}"
+    assert cfg.folder_template == "{author_sort}/{series}"
     assert cfg.confidence_threshold == 0.7
     assert cfg.ocr_enabled is False
     assert cfg.ocr_first_pages == 7

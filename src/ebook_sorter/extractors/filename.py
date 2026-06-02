@@ -34,9 +34,12 @@ class FilenameExtractor(BaseExtractor):
         series_index = None
         series_match = _SERIES_RE.search(stem)
         if series_match:
-            series = series_match.group(1).strip()
-            if series_match.group(2):
-                series_index = float(series_match.group(2))
+            candidate = series_match.group(1).strip()
+            # Reject purely numeric/dash candidates — those are ISBN brackets, not series names
+            if candidate and not re.fullmatch(r"[\d\s\-]+", candidate):
+                series = candidate
+                if series_match.group(2):
+                    series_index = float(series_match.group(2))
 
         clean = stem
         for pattern in [_YEAR_RE, _SERIES_RE]:
