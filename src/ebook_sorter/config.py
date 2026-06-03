@@ -61,7 +61,7 @@ _DEFAULT_SERIES_AUTHOR_SORT: dict[str, str] = {
 @dataclass
 class Config:
     output_dir: Path = field(default_factory=lambda: Path("."))
-    filename_template: str = "{authors} - {series} {series_index_padded} - {title} [{isbn}].{ext}"
+    filename_template: str = "{authors}{series_part} - {title} ({year}) [{isbn}].{ext}"
     folder_template: str = "{author_sort}/{series}"
     confidence_threshold: float = 0.7
     ocr_enabled: bool = False

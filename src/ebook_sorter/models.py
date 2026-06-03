@@ -82,6 +82,11 @@ class BookMetadata:
         else:
             author_sort_str = ""
 
+        if self.series:
+            series_part = f" - {self.series} {series_index_padded}".rstrip() if series_index_padded else f" - {self.series}"
+        else:
+            series_part = ""
+
         return {
             "title": self.title or "",
             "authors": ", ".join(a for a in self.authors if a) if self.authors else "",
@@ -93,6 +98,7 @@ class BookMetadata:
             "series": self.series or "",
             "series_index": series_index_str,
             "series_index_padded": series_index_padded,
+            "series_part": series_part,
             "language": self.language or "",
             "ext": self.extension,
             "author_sort": author_sort_str,
