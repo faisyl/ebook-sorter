@@ -23,11 +23,27 @@ def _opf_path_from_zip(zf: zipfile.ZipFile) -> str | None:
         return None
 
 
+def _calibre_series_from_root(root: ET.Element) -> tuple[str | None, float | None]:
+    """Read calibre:series and calibre:series_index from an OPF ElementTree root."""
+    series = None
+    series_index = None
+    for el in root.iter():
+        name = el.get("name", "")
+        if name == "calibre:series":
+            series = el.get("content") or None
+        elif name == "calibre:series_index":
+            try:
+                series_index = float(el.get("content", ""))
+            except (ValueError, TypeError):
+                pass
+    return series, series_index
+
+
 def _metadata_from_zip(path: Path) -> dict[str, object]:
     with zipfile.ZipFile(str(path), "r") as zf:
         opf_path = _opf_path_from_zip(zf)
         if opf_path is None:
-            return {"title": "", "authors": [], "identifiers": [], "publisher": "", "language": ""}
+            return {"title": "", "authors": [], "identifiers": [], "publisher": "", "language": "", "series": None, "series_index": None}
         root = ET.fromstring(zf.read(opf_path))
         def dc(tag: str) -> list[str]:
             return [el.text or "" for el in root.iter(f"{{{_DC}}}{tag}")]
@@ -36,12 +52,15 @@ def _metadata_from_zip(path: Path) -> dict[str, object]:
         identifiers = dc("identifier")
         publishers = dc("publisher")
         languages = dc("language")
+        series, series_index = _calibre_series_from_root(root)
     return {
         "title": titles[0] if titles else "",
         "authors": authors,
         "identifiers": identifiers,
         "publisher": publishers[0] if publishers else "",
         "language": languages[0] if languages else "",
+        "series": series,
+        "series_index": series_index,
     }
 
 
@@ -100,12 +119,24 @@ def extract_metadata(path: Path) -> dict[str, object]:
     lang_entries = book.get_metadata("DC", "language")
     language = lang_entries[0][0] if lang_entries else ""
 
+    # ebooklib doesn't expose calibre:series <meta> elements well; read from OPF directly
+    series, series_index = None, None
+    try:
+        with zipfile.ZipFile(str(path), "r") as zf:
+            opf_path = _opf_path_from_zip(zf)
+            if opf_path:
+                series, series_index = _calibre_series_from_root(ET.fromstring(zf.read(opf_path)))
+    except Exception:
+        pass
+
     return {
         "title": title,
         "authors": authors,
         "identifiers": identifiers,
         "publisher": publisher,
         "language": language,
+        "series": series,
+        "series_index": series_index,
     }
 
 

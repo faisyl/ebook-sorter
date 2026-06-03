@@ -24,6 +24,9 @@ _FILENAME_MATCH_THRESHOLD = 0.3
 # Confidence boost when filename confirms the looked-up title
 _FILENAME_CONFIRMATION_BOOST = 0.15
 
+# Matches a series name with a trailing volume/book number, e.g. "The Expanse 1" or "Dune 2.5"
+_SERIES_TRAILING_NUM_RE = re.compile(r"^(.*?)\s+(\d+(?:\.\d+)?)\s*$")
+
 
 def _clean_stem(stem: str) -> str:
     """Remove ISBNs, years, edition markers, and brackets from a filename stem."""
@@ -121,6 +124,12 @@ class Pipeline:
             lookup_result = self._search(merged.title, author_str)
             if lookup_result:
                 merged = merged.merge(lookup_result)
+
+        if merged.series and merged.series_index is None:
+            m = _SERIES_TRAILING_NUM_RE.match(merged.series)
+            if m and m.group(1).strip():
+                merged.series = m.group(1).strip()
+                merged.series_index = float(m.group(2))
 
         return merged
 

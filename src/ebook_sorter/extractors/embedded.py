@@ -92,6 +92,9 @@ class EmbeddedExtractor(BaseExtractor):
                 if isbn_13 is not None and isbn_10 is not None:
                     break
 
+        series = raw.get("series") or None
+        series_index = raw.get("series_index")
+
         return BookMetadata(
             title=title,
             authors=authors,
@@ -99,6 +102,8 @@ class EmbeddedExtractor(BaseExtractor):
             isbn_13=isbn_13,
             publisher=publisher,
             language=language,
+            series=series,
+            series_index=series_index,
             extension="epub",
             source="embedded",
             confidence=0.6 if title else 0.0,
