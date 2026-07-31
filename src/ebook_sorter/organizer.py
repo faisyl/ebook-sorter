@@ -33,8 +33,12 @@ class Organizer:
 
     def render_filename(self, meta: BookMetadata) -> str:
         d = meta.template_dict()
-        name_without_ext = self.filename_template.replace(".{ext}", "")
-        rendered = name_without_ext.format_map(d)
+        # Remove trailing {ext} from the template regardless of prefix
+        template = self.filename_template
+        ext_placeholder = "{ext}"
+        if template.endswith(ext_placeholder):
+            template = template[: -len(ext_placeholder)].rstrip(".")
+        rendered = template.format_map(d)
         rendered = _sanitize(rendered)
         ext = d.get("ext", "")
         if ext:

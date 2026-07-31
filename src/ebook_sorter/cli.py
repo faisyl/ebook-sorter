@@ -205,6 +205,14 @@ def find_isbn_cmd(file: str) -> None:
             from ebook_sorter.formats.epub import extract_text
             text = extract_text(path)
             isbns_found.extend(find_isbns(text))
+        elif ext == ".djvu":
+            from ebook_sorter.formats.djvu import extract_text
+            text = extract_text(path)
+            isbns_found.extend(find_isbns(text))
+        elif ext in (".mobi", ".azw", ".azw3"):
+            from ebook_sorter.formats.mobi import extract_text
+            text = extract_text(path)
+            isbns_found.extend(find_isbns(text))
     except Exception as e:
         console.print(f"[yellow]Warning: {e}[/yellow]")
 

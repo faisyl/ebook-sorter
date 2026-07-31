@@ -101,6 +101,7 @@ def _edit_metadata(meta: BookMetadata) -> BookMetadata:
         confidence=1.0,
         original_path=meta.original_path,
         extension=meta.extension,
+        author_sort=meta.author_sort,
     )
 
 

@@ -38,9 +38,12 @@ class RateLimitedClient:
                 resp = httpx.get(url, **kwargs)
                 if resp.status_code == 429:
                     retry_after = float(resp.headers.get("Retry-After", _BACKOFF_BASE * attempt))
-                    logger.warning("Rate limited (429) on %s, backing off %.1fs (attempt %d/%d)", url, retry_after, attempt, _MAX_RETRIES)
+                    logger.warning(
+                        "Rate limited (429) on %s, backing off %.1fs (attempt %d/%d)",
+                        url, retry_after, attempt, _MAX_RETRIES,
+                    )
                     time.sleep(retry_after)
-                    self._min_interval = min(self._min_interval * 2, 30.0)
+                    self._last_request = time.monotonic() + retry_after
                     continue
                 if resp.status_code >= 500 and attempt < _MAX_RETRIES:
                     wait = _BACKOFF_BASE * (2 ** (attempt - 1))

@@ -35,7 +35,6 @@ def _clean_stem(stem: str) -> str:
     # Remove [ISBN], [978...], [0-9X{10,13}] patterns
     cleaned = re.sub(r"\[[\dXx\-]{9,17}\]", "", cleaned)
     cleaned = re.sub(r"\(\d{4}\)", "", cleaned)  # (2006)
-    cleaned = re.sub(r"\b\d{4}\b", "", cleaned)  # standalone 4-digit years
     cleaned = re.sub(r"\d+(?:st|nd|rd|th)?\s*ed\w*", "", cleaned, flags=re.IGNORECASE)  # 2nd ed, 12ed
     cleaned = re.sub(r"[\[\](){}]", " ", cleaned)
     return cleaned
