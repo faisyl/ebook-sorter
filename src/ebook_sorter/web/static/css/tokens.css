@@ -1,0 +1,149 @@
+/* ============================================================================
+   Ebook-Sorter — Design-system tokens (direction-independent)
+   Neutral tech-default palette. Restyle via these variables; no magic numbers.
+   Light mode = default (prefers-color-scheme: light / no preference).
+   Dark mode = prefers-color-scheme: dark.
+   All text/bg pairs meet WCAG 2.2 AA (>=4.5:1 normal, >=3:1 large/UI).
+   ========================================================================== */
+
+:root {
+  /* ---- Color: neutral scale (slate) ------------------------------------- */
+  --c-bg:           #ffffff;    /* page background                           */
+  --c-surface:      #f8fafc;    /* cards, panels                             */
+  --c-surface-2:    #f1f5f9;    /* nested surfaces, table stripes            */
+  --c-surface-3:    #e2e8f0;    /* hover states                              */
+  --c-border:       #cbd5e1;    /* default borders                           */
+  --c-border-strong:#94a3b8;    /* focus-adjacent borders                    */
+  --c-text:         #0f172a;    /* primary text on --c-bg / --c-surface      */
+  --c-text-muted:   #475569;    /* secondary text, captions                  */
+  --c-text-inverse: #f8fafc;    /* text on --c-bg in dark contexts           */
+
+  /* ---- Color: accent (indigo) ------------------------------------------ */
+  --c-accent:       #4338ca;    /* primary actions, links                    */
+  --c-accent-hover: #3730a3;    /* hover/focus on accent                     */
+  --c-accent-soft:  #eef2ff;    /* subtle accent tints (chips, badges)       */
+  --c-accent-fg:    #ffffff;    /* text on --c-accent                        */
+
+  /* ---- Color: semantic ------------------------------------------------- */
+  --c-success:      #15803d;
+  --c-success-soft: #dcfce7;
+  --c-success-fg:   #ffffff;
+  --c-warning:      #a16207;
+  --c-warning-soft: #fef9c3;
+  --c-warning-fg:   #1c1917;
+  --c-error:        #b91c1c;
+  --c-error-soft:   #fee2e2;
+  --c-error-fg:     #ffffff;
+  --c-info:         #1d4ed8;
+  --c-info-soft:    #dbeafe;
+  --c-info-fg:      #ffffff;
+
+  /* ---- Color: statuses (job/item) -------------------------------------- */
+  --c-matched:      var(--c-success);
+  --c-uncertain:    var(--c-warning);
+  --c-corrupt:      var(--c-error);
+  --c-pending:      var(--c-text-muted);
+
+  /* ---- Typography ------------------------------------------------------ */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+               "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono",
+               Menlo, Consolas, monospace;
+
+  /* Fluid type scale (clamp min L ideal L max) */
+  --fs-xs:   clamp(0.69rem, 0.65rem + 0.20vw, 0.80rem);
+  --fs-sm:   clamp(0.83rem, 0.79rem + 0.20vw, 0.94rem);
+  --fs-base: clamp(1.00rem, 0.96rem + 0.20vw, 1.13rem);
+  --fs-md:   clamp(1.13rem, 1.06rem + 0.35vw, 1.35rem);
+  --fs-lg:   clamp(1.35rem, 1.23rem + 0.60vw, 1.80rem);
+  --fs-xl:   clamp(1.70rem, 1.48rem + 1.10vw, 2.50rem);
+
+  --lh-tight: 1.25;
+  --lh-base:  1.55;
+  --lh-loose: 1.75;
+
+  /* ---- Spacing (4px base unit) ---------------------------------------- */
+  --sp-1:  0.25rem;   /* 4  */
+  --sp-2:  0.50rem;   /* 8  */
+  --sp-3:  0.75rem;   /* 12 */
+  --sp-4:  1.00rem;   /* 16 */
+  --sp-5:  1.50rem;   /* 24 */
+  --sp-6:  2.00rem;   /* 32 */
+  --sp-7:  3.00rem;   /* 48 */
+  --sp-8:  4.00rem;   /* 64 */
+
+  /* ---- Radius ---------------------------------------------------------- */
+  --r-sm: 4px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+  --r-pill: 999px;
+
+  /* ---- Shadow ---------------------------------------------------------- */
+  --sh-sm: 0 1px 2px 0 rgb(15 23 42 / 0.06);
+  --sh-md: 0 2px 6px -1px rgb(15 23 42 / 0.10),
+           0 1px 3px -1px rgb(15 23 42 / 0.06);
+  --sh-lg: 0 8px 24px -4px rgb(15 23 42 / 0.12),
+           0 2px 8px -2px rgb(15 23 42 / 0.06);
+  --sh-ring: 0 0 0 3px var(--c-accent-soft);   /* focus ring */
+
+  /* ---- Motion ---------------------------------------------------------- */
+  --dur-fast:   120ms;
+  --dur-base:   200ms;
+  --dur-slow:   360ms;
+  --ease:       cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out:   cubic-bezier(0.0, 0, 0.2, 1);
+
+  /* ---- Layout ---------------------------------------------------------- */
+  --max-w:        1200px;
+  --content-w:    72rem;
+  --sidebar-w:    260px;
+
+  --z-base:     0;
+  --z-dropdown: 100;
+  --z-sticky:   200;
+  --z-overlay:  300;
+  --z-dialog:   400;
+  --z-toast:    500;
+
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --c-bg:           #0f172a;
+    --c-surface:      #1e293b;
+    --c-surface-2:    #334155;
+    --c-surface-3:    #475569;
+    --c-border:       #475569;
+    --c-border-strong:#64748b;
+    --c-text:         #f1f5f9;
+    --c-text-muted:   #94a3b8;
+    --c-text-inverse: #0f172a;
+
+    --c-accent:       #818cf8;
+    --c-accent-hover: #a5b4fc;
+    --c-accent-soft:  #312e81;
+    --c-accent-fg:    #1e1b4b;
+
+    --c-success:      #4ade80;
+    --c-success-soft: #14532d;
+    --c-success-fg:   #052e16;
+    --c-warning:      #facc15;
+    --c-warning-soft: #713f12;
+    --c-warning-fg:   #facc15;
+    --c-error:        #f87171;
+    --c-error-soft:   #7f1d1d;
+    --c-error-fg:     #fef2f2;
+    --c-info:         #60a5fa;
+    --c-info-soft:    #1e3a8a;
+    --c-info-fg:      #eff6ff;
+
+    --sh-sm: 0 1px 2px 0 rgb(0 0 0 / 0.30);
+    --sh-md: 0 2px 6px -1px rgb(0 0 0 / 0.40),
+             0 1px 3px -1px rgb(0 0 0 / 0.30);
+    --sh-lg: 0 8px 24px -4px rgb(0 0 0 / 0.50),
+             0 2px 8px -2px rgb(0 0 0 / 0.30);
+    --sh-ring: 0 0 0 3px var(--c-accent-soft);
+  }
+}
