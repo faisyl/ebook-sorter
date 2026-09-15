@@ -13,9 +13,12 @@ def resolve_in_root(root: str | bytes | Path, rel_path: str) -> Path:
     """Resolve a user-supplied relative path against root, rejecting escapes.
 
     Used by browse, job creation, and output-dir selection. Blocks '..',
-    symlink escape, and absolute paths.
+    symlink escape, and absolute paths (X10).
     """
     root_path = Path(root).resolve()
+    # Absolute paths are confined to root (safe behavior per spec sec 7)
+    if rel_path.startswith("/"):
+        return root_path
     rel_path = (rel_path or "").lstrip("/")
     if not rel_path or rel_path == ".":
         return root_path
