@@ -1,7 +1,19 @@
 """Shared test helpers."""
+import os
 import time
 
 import pytest
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _web_test_mode():
+    """Skip network lookups in the web app during tests (deterministic + fast).
+
+    The web job runner calls the real pipeline (network metadata lookups) during
+    preview; without this the preview-completion tests flake on lookup latency.
+    """
+    os.environ.setdefault("EBOOK_SORTER_WEB_TEST", "1")
+    yield
 
 
 @pytest.fixture

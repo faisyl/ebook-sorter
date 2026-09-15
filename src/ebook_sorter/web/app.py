@@ -18,6 +18,7 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from ebook_sorter.config import Config, load_config
@@ -546,6 +547,11 @@ def create_app(web_cfg: WebConfig | None = None) -> FastAPI:
             item_id, user_edited=False, status="pending",
         )
         return {"status": "ok"}
+
+    # Serve the SPA (mounted last so it never shadows the /api routes above).
+    static_dir = Path(__file__).parent / "static"
+    if static_dir.is_dir():
+        app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
 
     return app
 

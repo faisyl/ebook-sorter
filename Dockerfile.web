@@ -35,4 +35,4 @@ VOLUME ["/books", "/output", "/data"]
 
 EXPOSE 8080
 
-CMD ["uvicorn", "ebook_sorter.web:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "ebook_sorter.web:create_app", "--factory", "--host", "0.0.0.0", "--port", "8080"]
