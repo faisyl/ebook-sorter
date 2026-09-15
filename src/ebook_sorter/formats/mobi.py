@@ -40,9 +40,11 @@ def extract_text(path: Path) -> str:
         raise FileNotFoundError(f"File not found: {path}")
     if not shutil.which("ebook-convert"):
         return ""
+    tmp_path = None
     try:
-        with tempfile.NamedTemporaryFile(suffix=".txt", delete=False) as tmp:
-            tmp_path = tmp.name
+        tmp = tempfile.NamedTemporaryFile(suffix=".txt", delete=False)
+        tmp_path = tmp.name
+        tmp.close()
         subprocess.run(
             ["ebook-convert", str(path), tmp_path],
             capture_output=True,
@@ -56,3 +58,8 @@ def extract_text(path: Path) -> str:
         return ""
     except subprocess.TimeoutExpired:
         return ""
+    finally:
+        if tmp_path is not None:
+            tmp_file = Path(tmp_path)
+            if tmp_file.exists():
+                tmp_file.unlink()
