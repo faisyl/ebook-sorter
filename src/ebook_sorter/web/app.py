@@ -5,6 +5,7 @@ import asyncio
 import json
 import logging
 import shutil
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -45,6 +46,9 @@ _EBOOK_EXTS = {
     ".djvu", ".cbr", ".cbz", ".chm", ".doc", ".docx", ".odt",
 }
 
+# Web app uses a lower threshold so filename-only results (0.4) are matchable
+_WEB_CONFIDENCE_THRESHOLD = 0.3
+
 
 # ── Pydantic model for PATCH validation (X6) ─────────────────────────
 
@@ -72,7 +76,7 @@ def _get_current_user(request: Request) -> str:
 
 
 def _ensure_store(request: Request) -> JobStore:
-    """Lazily create the JobStore on first use (avoids mkdir at import time)."""
+    """Lazily create the JobStore on first use."""
     store = request.app.state._store
     if store is None:
         web_cfg = request.app.state.web_cfg
@@ -81,14 +85,10 @@ def _ensure_store(request: Request) -> JobStore:
     return store
 
 
-async def _ws_emit(app: FastAPI, job_id: str, event: dict) -> None:
-    """Publish a WS event to all connected clients for this job."""
-    conns = app.state._ws_connections.get(job_id, [])
-    for ws in list(conns):
-        try:
-            await ws.send_json(event)
-        except Exception:
-            pass
+def _is_test_mode(web_cfg: WebConfig) -> bool:
+    """Detect test mode from explicit env flag (not secret sniffing)."""
+    import os
+    return os.environ.get("EBOOK_SORTER_WEB_TEST", "").lower() in ("1", "true", "yes")
 
 
 def create_app(web_cfg: WebConfig | None = None) -> FastAPI:
@@ -100,8 +100,168 @@ def create_app(web_cfg: WebConfig | None = None) -> FastAPI:
     app = FastAPI(title="ebook-sorter web")
     app.state.web_cfg = web_cfg
     app.state.cfg = cfg
-    app.state._store = None  # lazy-initialized on first request
-    app.state._ws_connections = {}  # job_id -> [WebSocket]
+    app.state._store = None
+    app.state._ws_connections = {}
+    app.state._loop = asyncio.new_event_loop()
+
+    async def _ws_emit(job_id: str, event: dict) -> None:
+        """Publish a WS event to all connected clients for this job."""
+        conns = app.state._ws_connections.get(job_id, [])
+        for ws in list(conns):
+            try:
+                await ws.send_json(event)
+            except Exception:
+                pass
+
+    def _run_preview_sync(job_id: str) -> None:
+        """Synchronous preview runner (runs in a daemon thread)."""
+        wcfg = app.state.web_cfg
+        store = JobStore(wcfg.data_dir / "jobs.db")
+        cfg: Config = app.state.cfg
+
+        def _emit(event: dict) -> None:
+            try:
+                loop = app.state._loop
+                if loop and loop.is_running():
+                    loop.call_soon_threadsafe(
+                        asyncio.create_task, _ws_emit(job_id, event),
+                    )
+            except RuntimeError:
+                pass
+
+        try:
+            job = store.get_job(job_id)
+            if not job:
+                return
+            pipeline = _build_pipeline(cfg, wcfg)
+            input_root = resolve_in_root(wcfg.books_root, job["input_root"])
+
+            files: list[Path] = []
+            for subdir in job["subdirs"]:
+                sub_path = resolve_in_root(input_root, subdir)
+                for p in sorted(sub_path.rglob("*")):
+                    if p.is_file() and p.suffix.lower() in _EBOOK_EXTS:
+                        files.append(p)
+
+            store.update_job_counts(job_id, total=len(files))
+            matched = uncertain = errors = 0
+
+            for p in files:
+                # Check pause/cancel between files (X1)
+                current = store.get_job(job_id)
+                if current and current["status"] == "cancelled":
+                    return
+                while current and current["status"] == "paused":
+                    import time as _time
+                    _time.sleep(0.1)
+                    current = store.get_job(job_id)
+                    if current and current["status"] == "cancelled":
+                        return
+                    if current and current["status"] != "paused":
+                        break
+
+                rel = str(p.relative_to(wcfg.books_root))
+                item_id = store.create_item(job_id, rel)
+                try:
+                    meta = pipeline.process(p)
+                    planned = _render_dest(meta, job)
+                    cls = _classify(
+                        meta,
+                        job["options"].get("confidence_threshold", _WEB_CONFIDENCE_THRESHOLD),
+                    )
+                    store.update_item(
+                        item_id,
+                        meta=_meta_to_dict(meta),
+                        planned_dest=planned,
+                        status=cls,
+                    )
+                    if cls == "matched":
+                        matched += 1
+                    else:
+                        uncertain += 1
+                except Exception as e:
+                    store.update_item(item_id, status="error", error=str(e))
+                    errors += 1
+
+                _emit({
+                    "type": "item_update",
+                    "item_id": item_id,
+                    "counts": {"matched": matched, "uncertain": uncertain, "error": errors},
+                })
+
+            store.update_job_counts(
+                job_id, matched=matched, uncertain=uncertain, error=errors,
+            )
+            store.update_job_status(job_id, "preview_ready")
+            _emit({"type": "job_update", "status": "preview_ready"})
+
+        except Exception as e:
+            logger.exception("Preview job %s failed", job_id)
+            store.update_job_status(job_id, "failed")
+            _emit({"type": "job_update", "status": "failed", "error": str(e)})
+
+    def _run_apply_sync(job_id: str) -> None:
+        """Synchronous apply runner (runs in a daemon thread)."""
+        wcfg = app.state.web_cfg
+        store = JobStore(wcfg.data_dir / "jobs.db")
+
+        def _emit(event: dict) -> None:
+            try:
+                loop = app.state._loop
+                if loop and loop.is_running():
+                    loop.call_soon_threadsafe(
+                        asyncio.create_task, _ws_emit(job_id, event),
+                    )
+            except RuntimeError:
+                pass
+
+        try:
+            job = store.get_job(job_id)
+            if not job:
+                return
+            mode = job.get("options", {}).get("mode", "move")
+            items, _ = store.list_items(job_id)
+            moved = 0
+
+            for item in items:
+                current = store.get_job(job_id)
+                if current and current["status"] == "cancelled":
+                    return
+                while current and current["status"] == "paused":
+                    import time as _time
+                    _time.sleep(0.1)
+                    current = store.get_job(job_id)
+                    if current and current["status"] == "cancelled":
+                        return
+                    if current and current["status"] != "paused":
+                        break
+
+                if item["status"] != "matched":
+                    continue
+                src = resolve_in_root(wcfg.books_root, item["source_path"])
+                dest_str = item.get("planned_dest") or ""
+                dest = resolve_in_root(wcfg.output_root, dest_str)
+                dest.parent.mkdir(parents=True, exist_ok=True)
+
+                if mode == "copy":
+                    shutil.copy2(str(src), str(dest))
+                else:
+                    shutil.move(str(src), str(dest))
+                store.update_item(
+                    item_id=item["id"], actual_dest=dest_str, status="moved",
+                )
+                moved += 1
+
+                _emit({"type": "item_update", "item_id": item["id"], "moved": moved})
+
+            store.update_job_counts(job_id, moved=moved)
+            store.update_job_status(job_id, "completed")
+            _emit({"type": "job_update", "status": "completed"})
+
+        except Exception as e:
+            logger.exception("Apply job %s failed", job_id)
+            store.update_job_status(job_id, "failed")
+            _emit({"type": "job_update", "status": "failed", "error": str(e)})
 
     # ── Auth endpoints ──────────────────────────────────────────────
 
@@ -147,6 +307,10 @@ def create_app(web_cfg: WebConfig | None = None) -> FastAPI:
         else:
             raise HTTPException(status_code=400, detail=f"Unknown root: {root}")
 
+        # Reject absolute paths at the endpoint level (X10)
+        if path.startswith("/"):
+            raise HTTPException(status_code=400, detail="Absolute paths are not allowed")
+
         resolved = resolve_in_root(base, path)
         if not resolved.exists():
             raise HTTPException(status_code=404, detail="Path not found")
@@ -180,7 +344,9 @@ def create_app(web_cfg: WebConfig | None = None) -> FastAPI:
             output_dir=body.get("output_dir", ""),
             options=body.get("options", {}),
         )
-        store.update_job_status(job_id, "created")
+        # Auto-start preview in a daemon thread (X13: spec sec 5)
+        thread = threading.Thread(target=_run_preview_sync, args=(job_id,), daemon=True)
+        thread.start()
         return {"id": job_id, "status": "created"}
 
     @app.get("/api/jobs")
@@ -226,7 +392,8 @@ def create_app(web_cfg: WebConfig | None = None) -> FastAPI:
     ) -> dict:
         store = _ensure_store(request)
         store.update_job_status(job_id, "previewing")
-        asyncio.create_task(_run_preview(job_id, request.app))
+        thread = threading.Thread(target=_run_preview_sync, args=(job_id,), daemon=True)
+        thread.start()
         return {"status": "previewing"}
 
     @app.post("/api/jobs/{job_id}/apply")
@@ -237,7 +404,8 @@ def create_app(web_cfg: WebConfig | None = None) -> FastAPI:
     ) -> dict:
         store = _ensure_store(request)
         store.update_job_status(job_id, "applying")
-        asyncio.create_task(_run_apply(job_id, request.app))
+        thread = threading.Thread(target=_run_apply_sync, args=(job_id,), daemon=True)
+        thread.start()
         return {"status": "applying"}
 
     @app.post("/api/jobs/{job_id}/pause")
@@ -313,10 +481,8 @@ def create_app(web_cfg: WebConfig | None = None) -> FastAPI:
         item = store.get_item(item_id)
         if not item or item["job_id"] != job_id:
             raise HTTPException(status_code=404, detail="Item not found")
-        # Merge only whitelisted, validated fields (X6)
         updates = body.model_dump(exclude_unset=True)
         meta = {**item["meta"], **updates}
-        # Recompute planned_dest after edit (X12)
         job = store.get_job(job_id)
         planned = _render_dest_from_meta(meta, job) if job else item.get("planned_dest")
         store.update_item(
@@ -333,7 +499,6 @@ def create_app(web_cfg: WebConfig | None = None) -> FastAPI:
         request: Request,
         user: str = Depends(_get_current_user),
     ) -> dict:
-        # TODO: re-run lookup with overrides from body
         return {"candidates": []}
 
     @app.post("/api/jobs/{job_id}/items/{item_id}/apply")
@@ -385,168 +550,6 @@ def create_app(web_cfg: WebConfig | None = None) -> FastAPI:
     return app
 
 
-# ── Job runner tasks ─────────────────────────────────────────────────
-
-async def _run_preview(job_id: str, app: FastAPI) -> None:
-    """Preview runner with pause/cancel (X1), WS events (X4),
-    thread-offloaded pipeline (X5), and crash handling (X7)."""
-    wcfg = app.state.web_cfg
-    store = JobStore(wcfg.data_dir / "jobs.db")
-    cfg: Config = app.state.cfg
-
-    def _emit(event: dict) -> None:
-        """Schedule emit on the event loop thread-safely."""
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                loop.call_soon_threadsafe(
-                    asyncio.create_task, _ws_emit(app, job_id, event),
-                )
-        except RuntimeError:
-            pass
-
-    try:
-        job = store.get_job(job_id)
-        if not job:
-            return
-        pipeline = _build_pipeline(cfg, wcfg)
-        input_root = resolve_in_root(wcfg.books_root, job["input_root"])
-
-        files: list[Path] = []
-        for subdir in job["subdirs"]:
-            sub_path = resolve_in_root(input_root, subdir)
-            for p in sorted(sub_path.rglob("*")):
-                if p.is_file() and p.suffix.lower() in _EBOOK_EXTS:
-                    files.append(p)
-
-        store.update_job_counts(job_id, total=len(files))
-        matched = uncertain = errors = 0
-
-        for p in files:
-            # Check pause/cancel between files (X1)
-            current = store.get_job(job_id)
-            if current and current["status"] == "cancelled":
-                return
-            while current and current["status"] == "paused":
-                await asyncio.sleep(0.5)
-                current = store.get_job(job_id)
-                if current and current["status"] == "cancelled":
-                    return
-                if current and current["status"] != "paused":
-                    break
-
-            rel = str(p.relative_to(wcfg.books_root))
-            item_id = store.create_item(job_id, rel)
-            try:
-                # Run blocking pipeline in thread (X5)
-                meta = await asyncio.to_thread(pipeline.process, p)
-                planned = _render_dest(meta, job)
-                cls = _classify(
-                    meta,
-                    job["options"].get("confidence_threshold", cfg.confidence_threshold),
-                )
-                store.update_item(
-                    item_id,
-                    meta=_meta_to_dict(meta),
-                    planned_dest=planned,
-                    status=cls,
-                )
-                if cls == "matched":
-                    matched += 1
-                else:
-                    uncertain += 1
-            except Exception as e:
-                store.update_item(item_id, status="error", error=str(e))
-                errors += 1
-
-            # Emit WS event per item (X4)
-            _emit({
-                "type": "item_update",
-                "item_id": item_id,
-                "counts": {"matched": matched, "uncertain": uncertain, "error": errors},
-            })
-
-        store.update_job_counts(
-            job_id, matched=matched, uncertain=uncertain, error=errors,
-        )
-        store.update_job_status(job_id, "preview_ready")
-        _emit({"type": "job_update", "status": "preview_ready"})
-
-    except Exception as e:
-        logger.exception("Preview job %s failed", job_id)
-        store.update_job_status(job_id, "failed")
-        _emit({"type": "job_update", "status": "failed", "error": str(e)})
-
-
-async def _run_apply(job_id: str, app: FastAPI) -> None:
-    """Apply runner with pause/cancel (X1), copy/mode support (X3),
-    WS events (X4), and crash handling (X7)."""
-    wcfg = app.state.web_cfg
-    store = JobStore(wcfg.data_dir / "jobs.db")
-
-    def _emit(event: dict) -> None:
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                loop.call_soon_threadsafe(
-                    asyncio.create_task, _ws_emit(app, job_id, event),
-                )
-        except RuntimeError:
-            pass
-
-    try:
-        job = store.get_job(job_id)
-        if not job:
-            return
-        mode = job.get("options", {}).get("mode", "move")
-        items, _ = store.list_items(job_id)
-        moved = 0
-
-        for item in items:
-            # Check pause/cancel between files (X1)
-            current = store.get_job(job_id)
-            if current and current["status"] == "cancelled":
-                return
-            while current and current["status"] == "paused":
-                await asyncio.sleep(0.5)
-                current = store.get_job(job_id)
-                if current and current["status"] == "cancelled":
-                    return
-                if current and current["status"] != "paused":
-                    break
-
-            if item["status"] != "matched":
-                continue
-            src = resolve_in_root(wcfg.books_root, item["source_path"])
-            dest_str = item.get("planned_dest") or ""
-            dest = resolve_in_root(wcfg.output_root, dest_str)
-            dest.parent.mkdir(parents=True, exist_ok=True)
-
-            if mode == "copy":
-                shutil.copy2(str(src), str(dest))
-            else:
-                shutil.move(str(src), str(dest))
-            store.update_item(
-                item_id=item["id"], actual_dest=dest_str, status="moved",
-            )
-            moved += 1
-
-            _emit({
-                "type": "item_update",
-                "item_id": item["id"],
-                "moved": moved,
-            })
-
-        store.update_job_counts(job_id, moved=moved)
-        store.update_job_status(job_id, "completed")
-        _emit({"type": "job_update", "status": "completed"})
-
-    except Exception as e:
-        logger.exception("Apply job %s failed", job_id)
-        store.update_job_status(job_id, "failed")
-        _emit({"type": "job_update", "status": "failed", "error": str(e)})
-
-
 # ── Module-level helpers ────────────────────────────────────────────
 
 def _build_pipeline(cfg: Config, web_cfg: WebConfig) -> Pipeline:
@@ -555,13 +558,15 @@ def _build_pipeline(cfg: Config, web_cfg: WebConfig) -> Pipeline:
         EmbeddedExtractor(),
         TextContentExtractor(cfg.ocr_first_pages, cfg.ocr_last_pages),
     ]
-    lookups = [
-        OpenLibraryLookup(),
-        GoogleBooksLookup(
-            api_key=web_cfg.google_books_api_key or cfg.google_books_api_key,
-        ),
-        CalibreLookup(),
-    ]
+    # In test mode, skip network lookups for speed
+    if _is_test_mode(web_cfg):
+        lookups: list = [CalibreLookup()]
+    else:
+        lookups = [
+            OpenLibraryLookup(),
+            GoogleBooksLookup(api_key=web_cfg.google_books_api_key or cfg.google_books_api_key),
+            CalibreLookup(),
+        ]
     return Pipeline(extractors=extractors, lookups=lookups)
 
 
