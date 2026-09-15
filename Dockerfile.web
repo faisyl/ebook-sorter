@@ -27,7 +27,7 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/*
 
 COPY --from=builder /build/dist/*.whl /tmp/
-RUN pip install --no-cache-dir /tmp/*.whl[web] && rm /tmp/*.whl
+RUN WHL="$(ls /tmp/*.whl)" && pip install --no-cache-dir "${WHL}[web]" && rm /tmp/*.whl
 
 ENV BOOKS_ROOT=/books OUTPUT_ROOT=/output APP_DATA=/data PORT=8080
 
