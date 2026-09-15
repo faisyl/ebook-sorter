@@ -56,5 +56,11 @@ class RateLimitedClient:
                     logger.debug("Timeout on attempt %d, retrying", attempt)
                     continue
                 raise
+            except httpx.HTTPError:
+                # Non-timeout errors (ConnectError, DNS failure, etc.) are
+                # unlikely to resolve with retry — stop immediately instead
+                # of burning 15s of silent retries per file.
+                logger.debug("HTTP error on %s, stopping retries", url)
+                break
 
         return resp

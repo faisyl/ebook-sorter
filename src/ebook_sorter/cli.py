@@ -108,10 +108,28 @@ def _process_stem_group(
 
 def _resolve_author_sort(meta: BookMetadata, cfg: Config) -> None:
     """Set meta.author_sort from config overrides if not already set."""
-    if not meta.author_sort and meta.series:
+    if meta.author_sort:
+        return
+    if meta.series:
         override = cfg.series_author_sort.get(meta.series)
         if override:
             meta.author_sort = override
+            return
+    # No direct series match — try to find an override by matching the
+    # title against series names, or the author's last name against the
+    # override values. This handles books where the API omits the series
+    # field but the title/author still identifies the pen-name series.
+    title_lower = (meta.title or "").lower()
+    author_last = ""
+    if meta.authors:
+        author_last = meta.authors[0].strip().split()[-1].lower()
+    for series_name, author_sort in cfg.series_author_sort.items():
+        if series_name.lower() in title_lower:
+            meta.author_sort = author_sort
+            return
+        if author_last and author_sort.split(",")[0].strip().lower() == author_last:
+            meta.author_sort = author_sort
+            return
 
 
 @click.group()

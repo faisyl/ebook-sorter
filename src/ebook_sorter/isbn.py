@@ -48,8 +48,10 @@ def isbn_10_to_13(isbn_10: str) -> str:
 def isbn_13_to_10(isbn_13: str) -> str | None:
     """Derive ISBN-10 from a 978-prefixed ISBN-13.
 
-    Only works for ISBN-13s starting with '978' (not '979').
-    Returns None if the input doesn't start with 978.
+    Only works for ISBN-13s starting with '978' (not '979'). 979-prefixed
+    ISBNs (music, some recent publications) have no ISBN-10 equivalent,
+    so this returns None. The pipeline's _try_isbn_lookups relies on this
+    None being skipped — never pass it to a lookup URL.
     """
     normalized = normalize_isbn(isbn_13)
     if not normalized.startswith("978") or len(normalized) != 13:

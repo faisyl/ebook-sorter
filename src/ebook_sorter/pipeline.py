@@ -88,6 +88,13 @@ class Pipeline:
                 )
 
         if merged.has_isbn:
+            # A bare (unprefixed) ISBN from text_content has confidence
+            # ~0.3 (vs >= 0.6 for prefixed). Track this so false-positive
+            # bare ISBNs can't clear the confidence threshold via the
+            # filename-confirmation boost.
+            isbn_from_bare = (
+                merged.source == "text_content" and merged.confidence <= 0.3
+            )
             lookup_result = self._try_isbn_lookups(merged)
             if lookup_result:
                 # Filename confirmation: if ISBN came from text/embedded (not filename),
@@ -98,25 +105,31 @@ class Pipeline:
                     or (merged.isbn_10 and merged.isbn_10 in filename_isbns)
                 )
                 if not isbn_from_filename and lookup_result.title:
-                    match_score = compute_filename_match_score(path.stem, lookup_result.title)
-                    if match_score >= _FILENAME_MATCH_THRESHOLD:
-                        logger.debug(
-                            "Filename confirms title: %r vs %r (score=%.2f), boosting confidence",
-                            path.stem,
-                            lookup_result.title,
-                            match_score,
-                        )
-                        lookup_result.confidence = min(
-                            lookup_result.confidence + _FILENAME_CONFIRMATION_BOOST,
-                            1.0,
-                        )
+                    if isbn_from_bare:
+                        # Bare ISBNs are unreliable — cap the lookup confidence
+                        # below the default threshold so a false positive can't
+                        # organize the file on a filename-confirmation fluke.
+                        lookup_result.confidence = min(lookup_result.confidence, 0.6)
                     else:
-                        logger.debug(
-                            "Filename does NOT confirm title: %r vs %r (score=%.2f)",
-                            path.stem,
-                            lookup_result.title,
-                            match_score,
-                        )
+                        match_score = compute_filename_match_score(path.stem, lookup_result.title)
+                        if match_score >= _FILENAME_MATCH_THRESHOLD:
+                            logger.debug(
+                                "Filename confirms title: %r vs %r (score=%.2f), boosting confidence",
+                                path.stem,
+                                lookup_result.title,
+                                match_score,
+                            )
+                            lookup_result.confidence = min(
+                                lookup_result.confidence + _FILENAME_CONFIRMATION_BOOST,
+                                1.0,
+                            )
+                        else:
+                            logger.debug(
+                                "Filename does NOT confirm title: %r vs %r (score=%.2f)",
+                                path.stem,
+                                lookup_result.title,
+                                match_score,
+                            )
                 merged = merged.merge(lookup_result)
         elif merged.title:
             author_str = ", ".join(a for a in merged.authors if a) if merged.authors else ""
@@ -133,6 +146,11 @@ class Pipeline:
         return merged
 
     def _lookup_isbn(self, isbn: str) -> BookMetadata | None:
+        # Validate ISBN before forming lookup URLs — skip None, empty,
+        # or non-ISBN strings that could produce a bad request.
+        if not isbn or not isbn.isalnum():
+            logger.debug("Skipping invalid ISBN: %r", isbn)
+            return None
         for lookup in self.lookups:
             try:
                 result = lookup.lookup_isbn(isbn)
