@@ -26,6 +26,9 @@ def extract_metadata(path: Path) -> dict[str, str]:
             info_path = Path(tmp_dir) / "ComicInfo.xml"
             if not info_path.exists():
                 return {}
+            # Guard against 7z path-traversal entries writing outside tmp_dir.
+            if not info_path.is_relative_to(tmp_dir):
+                return {}
             tree = ET.parse(info_path)
             root = tree.getroot()
             meta: dict[str, str] = {}
