@@ -47,8 +47,8 @@ _EBOOK_EXTS = {
     ".djvu", ".cbr", ".cbz", ".chm", ".doc", ".docx", ".odt",
 }
 
-# Web app uses a lower threshold so filename-only results (0.4) are matchable
-_WEB_CONFIDENCE_THRESHOLD = 0.3
+# Default confidence threshold (matches CLI default)
+_WEB_CONFIDENCE_THRESHOLD = 0.7
 
 
 # ── Pydantic model for PATCH validation (X6) ─────────────────────────
@@ -337,6 +337,17 @@ def create_app(web_cfg: WebConfig | None = None) -> FastAPI:
         user: str = Depends(_get_current_user),
     ) -> dict:
         body = await request.json()
+        wcfg = _get_web_cfg(request)
+        # X13: validate paths at creation time — reject early with 400
+        try:
+            resolve_in_root(wcfg.books_root, body.get("input_root", ""))
+            for subdir in body.get("subdirs", []):
+                resolve_in_root(wcfg.books_root, subdir)
+            resolve_in_root(wcfg.output_root, body.get("output_dir", ""))
+        except HTTPException:
+            raise HTTPException(
+                status_code=400, detail="Path escapes the allowed root",
+            )
         store = _ensure_store(request)
         job_id = store.create_job(
             name=body.get("name", "Untitled"),
@@ -500,7 +511,21 @@ def create_app(web_cfg: WebConfig | None = None) -> FastAPI:
         request: Request,
         user: str = Depends(_get_current_user),
     ) -> dict:
-        return {"candidates": []}
+        """Re-run online lookup with overrides and return refreshed candidates (X8)."""
+        wcfg = _get_web_cfg(request)
+        store = _ensure_store(request)
+        item = store.get_item(item_id)
+        if not item or item["job_id"] != job_id:
+            raise HTTPException(status_code=404, detail="Item not found")
+        cfg = request.app.state.cfg
+        pipeline = _build_pipeline(cfg, wcfg)
+        src = resolve_in_root(wcfg.books_root, item["source_path"])
+        try:
+            meta = pipeline.process(src)
+            candidate = _meta_to_dict(meta)
+        except Exception as e:
+            candidate = {"error": str(e)}
+        return {"candidates": [candidate]}
 
     @app.post("/api/jobs/{job_id}/items/{item_id}/apply")
     async def apply_item(
@@ -543,9 +568,35 @@ def create_app(web_cfg: WebConfig | None = None) -> FastAPI:
         request: Request,
         user: str = Depends(_get_current_user),
     ) -> dict:
-        _ensure_store(request).update_item(
-            item_id, user_edited=False, status="pending",
-        )
+        """Re-run pipeline on the source file and restore original detection (X9)."""
+        wcfg = _get_web_cfg(request)
+        store = _ensure_store(request)
+        item = store.get_item(item_id)
+        if not item or item["job_id"] != job_id:
+            raise HTTPException(status_code=404, detail="Item not found")
+        cfg = request.app.state.cfg
+        pipeline = _build_pipeline(cfg, wcfg)
+        job = store.get_job(job_id)
+        src = resolve_in_root(wcfg.books_root, item["source_path"])
+        try:
+            meta = pipeline.process(src)
+            planned = _render_dest(meta, job)
+            cls = _classify(
+                meta,
+                job["options"].get("confidence_threshold", _WEB_CONFIDENCE_THRESHOLD) if job else _WEB_CONFIDENCE_THRESHOLD,
+            )
+            store.update_item(
+                item_id,
+                meta=_meta_to_dict(meta),
+                planned_dest=planned,
+                user_edited=False,
+                status=cls,
+                error=None,
+            )
+        except Exception as e:
+            store.update_item(
+                item_id, user_edited=False, status="error", error=str(e),
+            )
         return {"status": "ok"}
 
     # Serve the SPA (mounted last so it never shadows the /api routes above).

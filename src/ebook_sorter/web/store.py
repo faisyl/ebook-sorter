@@ -154,6 +154,10 @@ class JobStore:
             )
 
     def set_job_flag(self, job_id: str, field: str, value: int) -> None:
+        """Set a job flag field. X11: field is allowlisted to prevent SQL injection."""
+        _ALLOWED_FLAGS = {"total", "matched", "uncertain", "error", "moved"}
+        if field not in _ALLOWED_FLAGS:
+            raise ValueError(f"Invalid flag field: {field}")
         with self._conn() as conn:
             conn.execute(
                 f"UPDATE job SET {field} = ?, updated_at = ? WHERE id = ?",

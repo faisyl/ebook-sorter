@@ -120,7 +120,7 @@ class TestPreviewDoesNotMove:
 class TestApplyMovesFiles:
     def test_apply_moves_files_to_output(self, authed: TestClient, web_cfg: WebConfig):
         """Apply should move matched items to output directory."""
-        job_id = _create_job(authed, web_cfg, files=["Cory Doctorow - Little Brother.epub"])
+        job_id = _create_job(authed, web_cfg, files=["Cory Doctorow - Little Brother.epub"], options={"confidence_threshold": 0.3})
         authed.post(f"/api/jobs/{job_id}/preview")
         time.sleep(0.5)
         authed.post(f"/api/jobs/{job_id}/apply")

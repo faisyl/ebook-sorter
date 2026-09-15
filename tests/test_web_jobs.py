@@ -151,7 +151,7 @@ class TestPauseCancelRealEffect:
 
 class TestJobItems:
     def test_items_listed_for_job(self, authed: TestClient, web_cfg: WebConfig, wait_for) -> None:
-        job_id = _create_job_with_files(authed, web_cfg, files=["Book1.epub", "Book2.epub"])
+        job_id = _create_job_with_files(authed, web_cfg, files=["Book1.epub", "Book2.epub"], options={"confidence_threshold": 0.3})
         # Preview populates items asynchronously — wait for it
         wait_for(authed, job_id, "preview_ready")
         resp = authed.get(f"/api/jobs/{job_id}/items")
@@ -171,7 +171,7 @@ class TestJobItems:
         assert data["next_cursor"] is not None
 
     def test_items_filter_by_status(self, authed: TestClient, web_cfg: WebConfig, wait_for) -> None:
-        job_id = _create_job_with_files(authed, web_cfg, files=["Book1.epub"])
+        job_id = _create_job_with_files(authed, web_cfg, files=["Book1.epub"], options={"confidence_threshold": 0.3})
         wait_for(authed, job_id, "preview_ready")
         resp = authed.get(f"/api/jobs/{job_id}/items?status=pending")
         assert resp.status_code == 200
@@ -179,7 +179,7 @@ class TestJobItems:
         assert "items" in data
 
     def test_counts_by_status(self, authed: TestClient, web_cfg: WebConfig, wait_for) -> None:
-        job_id = _create_job_with_files(authed, web_cfg, files=["Book1.epub", "Book2.epub"])
+        job_id = _create_job_with_files(authed, web_cfg, files=["Book1.epub", "Book2.epub"], options={"confidence_threshold": 0.3})
         wait_for(authed, job_id, "preview_ready")
         resp = authed.get(f"/api/jobs/{job_id}")
         data = resp.json()
@@ -198,7 +198,7 @@ class TestPreview:
 
     def test_preview_does_not_move_files(self, authed: TestClient, web_cfg: WebConfig, wait_for) -> None:
         """Preview must NOT move any files."""
-        job_id = _create_job_with_files(authed, web_cfg, files=["Author - Title.epub"])
+        job_id = _create_job_with_files(authed, web_cfg, files=["Author - Title.epub"], options={"confidence_threshold": 0.3})
         authed.post(f"/api/jobs/{job_id}/preview")
         wait_for(authed, job_id, "preview_ready")
         sub = web_cfg.books_root / "sub"
@@ -217,7 +217,7 @@ class TestApply:
 
     def test_apply_moves_matched_items(self, authed: TestClient, web_cfg: WebConfig, wait_for) -> None:
         """Apply should move matched items to output."""
-        job_id = _create_job_with_files(authed, web_cfg, files=["Cory Doctorow - Little Brother.epub"])
+        job_id = _create_job_with_files(authed, web_cfg, files=["Cory Doctorow - Little Brother.epub"], options={"confidence_threshold": 0.3})
         wait_for(authed, job_id, "preview_ready")
         authed.post(f"/api/jobs/{job_id}/apply")
         wait_for(authed, job_id, "completed")
@@ -231,8 +231,7 @@ class TestApply:
 class TestCopyVsMove:
     def test_move_mode_removes_original(self, authed: TestClient, web_cfg: WebConfig, wait_for) -> None:
         """X3: In move mode (default), original file should be GONE after apply."""
-        job_id = _create_job_with_files(authed, web_cfg, files=["Cory Doctorow - Little Brother.epub"],
-                                        options={"mode": "move"})
+        job_id = _create_job_with_files(authed, web_cfg, files=["Cory Doctorow - Little Brother.epub"], options={"confidence_threshold": 0.3, "mode": "move"})
         wait_for(authed, job_id, "preview_ready")
         authed.post(f"/api/jobs/{job_id}/apply")
         wait_for(authed, job_id, "completed")
@@ -242,8 +241,7 @@ class TestCopyVsMove:
 
     def test_copy_mode_keeps_original(self, authed: TestClient, web_cfg: WebConfig, wait_for) -> None:
         """X3: In copy mode, original file should STILL EXIST after apply."""
-        job_id = _create_job_with_files(authed, web_cfg, files=["Cory Doctorow - Little Brother.epub"],
-                                        options={"mode": "copy"})
+        job_id = _create_job_with_files(authed, web_cfg, files=["Cory Doctorow - Little Brother.epub"], options={"confidence_threshold": 0.3, "mode": "copy"})
         wait_for(authed, job_id, "preview_ready")
         authed.post(f"/api/jobs/{job_id}/apply")
         wait_for(authed, job_id, "completed")
@@ -258,7 +256,7 @@ class TestCopyVsMove:
 class TestPerItemApply:
     def test_per_item_apply_moves_file(self, authed: TestClient, web_cfg: WebConfig, wait_for) -> None:
         """X2: Per-item apply must actually move the FILE on disk, not just flip status."""
-        job_id = _create_job_with_files(authed, web_cfg, files=["Cory Doctorow - Little Brother.epub"])
+        job_id = _create_job_with_files(authed, web_cfg, files=["Cory Doctorow - Little Brother.epub"], options={"confidence_threshold": 0.3})
         wait_for(authed, job_id, "preview_ready")
         items = authed.get(f"/api/jobs/{job_id}/items").json()["items"]
         assert len(items) >= 1
@@ -355,7 +353,7 @@ class TestJobCounts:
         assert isinstance(counts, dict)
 
     def test_counts_reflect_items(self, authed: TestClient, web_cfg: WebConfig, wait_for) -> None:
-        job_id = _create_job_with_files(authed, web_cfg, files=["A.epub", "B.epub"])
+        job_id = _create_job_with_files(authed, web_cfg, files=["A.epub", "B.epub"], options={"confidence_threshold": 0.3})
         wait_for(authed, job_id, "preview_ready")
         resp = authed.get(f"/api/jobs/{job_id}")
         counts = resp.json()["counts"]
@@ -369,8 +367,8 @@ class TestJobCounts:
 class TestJobStore:
     def test_multiple_jobs_independent(self, authed: TestClient, web_cfg: WebConfig):
         """Jobs created in sequence don't interfere."""
-        job1 = _create_job_with_files(authed, web_cfg, subdir="dir1", files=["A.epub"])
-        job2 = _create_job_with_files(authed, web_cfg, subdir="dir2", files=["B.epub"])
+        job1 = _create_job_with_files(authed, web_cfg, subdir="dir1", files=["A.epub"], options={"confidence_threshold": 0.3})
+        job2 = _create_job_with_files(authed, web_cfg, subdir="dir2", files=["B.epub"], options={"confidence_threshold": 0.3})
 
         resp1 = authed.get(f"/api/jobs/{job1}")
         resp2 = authed.get(f"/api/jobs/{job2}")
