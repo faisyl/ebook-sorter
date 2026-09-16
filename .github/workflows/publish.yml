@@ -67,3 +67,24 @@ jobs:
           labels: ${{ steps.meta-slim.outputs.labels }}
           build-args: |
             SETUPTOOLS_SCM_PRETEND_VERSION=${{ steps.meta-full.outputs.version }}
+
+      - name: Extract metadata (web)
+        id: meta-web
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}},suffix=-web
+            type=semver,pattern={{major}}.{{minor}},suffix=-web
+            type=raw,value=web
+
+      - name: Build and push (web)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.web
+          push: true
+          tags: ${{ steps.meta-web.outputs.tags }}
+          labels: ${{ steps.meta-web.outputs.labels }}
+          build-args: |
+            SETUPTOOLS_SCM_PRETEND_VERSION=${{ steps.meta-full.outputs.version }}
