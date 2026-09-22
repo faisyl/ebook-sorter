@@ -22,7 +22,11 @@ def resolve_in_root(root: str | bytes | Path, rel_path: str) -> Path:
     rel_path = (rel_path or "").lstrip("/")
     if not rel_path or rel_path == ".":
         return root_path
-    resolved = (root_path / rel_path).resolve()
+    try:
+        resolved = (root_path / rel_path).resolve()
+    except ValueError:
+        # e.g. embedded null bytes, which Path rejects with ValueError (X15)
+        raise HTTPException(status_code=400, detail="Invalid path")
     if root_path != resolved and not resolved.is_relative_to(root_path):
         raise HTTPException(
             status_code=400,

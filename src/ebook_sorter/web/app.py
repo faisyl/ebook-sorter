@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import shutil
 import threading
 from pathlib import Path
@@ -88,7 +89,6 @@ def _ensure_store(request: Request) -> JobStore:
 
 def _is_test_mode(web_cfg: WebConfig) -> bool:
     """Detect test mode from explicit env flag (not secret sniffing)."""
-    import os
     return os.environ.get("EBOOK_SORTER_WEB_TEST", "").lower() in ("1", "true", "yes")
 
 
@@ -96,7 +96,10 @@ def create_app(web_cfg: WebConfig | None = None) -> FastAPI:
     """Create the FastAPI app. Accepts an optional WebConfig for testing."""
     if web_cfg is None:
         web_cfg = load_web_config()
-    cfg = load_config(Path("ebook-sorter.toml"))
+    # CONFIG_PATH lets deployments (e.g. Docker, where CWD is "/") point at a
+    # mounted config explicitly; falls back to CWD-relative for CLI parity (X16).
+    config_path = Path(os.environ.get("CONFIG_PATH", "ebook-sorter.toml"))
+    cfg = load_config(config_path)
 
     app = FastAPI(title="ebook-sorter web")
     app.state.web_cfg = web_cfg
@@ -318,6 +321,9 @@ def create_app(web_cfg: WebConfig | None = None) -> FastAPI:
 
         entries = []
         for child in sorted(resolved.iterdir()):
+            if child.name.startswith("."):
+                # Hide dotfiles/dot-dirs (.DS_Store, .AppleDouble, ...) from browse
+                continue
             try:
                 rel = child.relative_to(base)
                 entries.append({

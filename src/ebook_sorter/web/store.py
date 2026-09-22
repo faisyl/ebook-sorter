@@ -200,14 +200,20 @@ class JobStore:
         if status:
             query += " AND status = ?"
             params.append(status)
-        query += " ORDER BY rowid"
-        if cursor:
-            # Opaque cursor: last seen item id
-            query += " AND rowid > (SELECT rowid FROM item WHERE id = ?)"
-            params.append(cursor)
-        query += f" LIMIT {int(limit)}"
 
         with self._conn() as conn:
+            if cursor:
+                # Opaque cursor: last seen item id. If that item was since
+                # deleted, "rowid > (SELECT ...)" evaluates to NULL and
+                # matches nothing, silently emptying the page (X17) — so
+                # only apply the cursor when it still resolves to a row.
+                cursor_row = conn.execute(
+                    "SELECT rowid FROM item WHERE id = ?", (cursor,)
+                ).fetchone()
+                if cursor_row is not None:
+                    query += " AND rowid > ?"
+                    params.append(cursor_row["rowid"])
+            query += f" ORDER BY rowid LIMIT {int(limit)}"
             rows = conn.execute(query, params).fetchall()
 
         items = [self._row_to_item(r) for r in rows]
