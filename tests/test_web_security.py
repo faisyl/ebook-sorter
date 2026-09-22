@@ -91,6 +91,13 @@ class TestResolveInRoot:
         assert result == web_cfg.books_root.resolve()
         assert result.is_relative_to(web_cfg.books_root.resolve())
 
+    def test_rejects_embedded_null_byte(self, web_cfg: WebConfig):
+        # Path() raises ValueError on embedded null bytes; resolve_in_root
+        # must turn that into a 400, not a raw 500 (X15).
+        with pytest.raises(HTTPException) as exc_info:
+            resolve_in_root(web_cfg.books_root, "subdir\x00/etc/passwd")
+        assert exc_info.value.status_code == 400
+
     def test_rejects_symlink_escape(self, web_cfg: WebConfig, tmp_path: Path):
         # Create a symlink inside books pointing outside it
         outside = tmp_path / "outside"
@@ -132,6 +139,10 @@ class TestBrowsePathTraversal:
             # Good — path was confined to root
             pass
 
+    def test_browse_rejects_null_byte(self, authed: TestClient):
+        resp = authed.get("/api/browse?root=books&path=subdir%00/etc/passwd")
+        assert resp.status_code == 400
+
     def test_browse_rejects_unknown_root(self, authed: TestClient):
         resp = authed.get("/api/browse?root=secret&path=")
         assert resp.status_code == 400
@@ -155,6 +166,20 @@ class TestBrowsePathTraversal:
         assert resp.status_code == 200
         names = [e["name"] for e in resp.json()["entries"]]
         assert "sorted" in names
+
+    def test_browse_hides_dotfiles_and_dotdirs(
+        self, authed: TestClient, web_cfg: WebConfig
+    ):
+        (web_cfg.books_root / "dir1").mkdir()
+        (web_cfg.books_root / "book.epub").write_text("x")
+        (web_cfg.books_root / ".DS_Store").write_text("x")
+        (web_cfg.books_root / ".AppleDouble").mkdir()
+        resp = authed.get("/api/browse?root=books&path=")
+        assert resp.status_code == 200
+        names = [e["name"] for e in resp.json()["entries"]]
+        assert names == ["book.epub", "dir1"]
+        assert ".DS_Store" not in names
+        assert ".AppleDouble" not in names
 
 
 # ── Auth: session cookie ──────────────────────────────────────────────

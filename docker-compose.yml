@@ -13,8 +13,8 @@ services:
       - es-data:/data
     environment:
       - APP_USER=admin
-      - APP_PASSWORD=changeme
-      - APP_SECRET=change-me-in-production
+      - APP_PASSWORD=${APP_PASSWORD:?Set APP_PASSWORD (e.g. in a .env file) before starting this service}
+      - APP_SECRET=${APP_SECRET:?Set APP_SECRET (e.g. in a .env file) before starting this service}
       - PORT=8080
     restart: unless-stopped
 
