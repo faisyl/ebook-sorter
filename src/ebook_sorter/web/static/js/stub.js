@@ -1,10 +1,12 @@
 /* ============================================================================
    stub.js — dev-only mock API matching spec sec 5. Replaced by real backend.
    Intercepts fetch to /api/* and serves deterministic fake data.
-   Toggle: set window.__USE_STUB__ = false to hit the real backend.
+   OFF by default: the real backend is used unless a developer explicitly
+   opts in with window.__USE_STUB__ = true (e.g. for frontend dev with no
+   server). Shipping this active would hijack the real API — hence opt-in.
    ========================================================================== */
 (function () {
-  if (window.__USE_STUB__ === false) return;
+  if (window.__USE_STUB__ !== true) return;
 
   const delay = (ms = 250) => new Promise((r) => setTimeout(r, ms));
   const origFetch = window.fetch;

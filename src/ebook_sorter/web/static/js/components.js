@@ -40,6 +40,9 @@ const Components = (() => {
     }
 
     async function loadInto(li, ul, relPath) {
+      // Guard against two concurrent loads of the same <ul> (e.g. the initial
+      // load racing an onEnter refresh) each appending a copy of the entries.
+      const seq = (ul.__loadSeq = (ul.__loadSeq || 0) + 1);
       ul.innerHTML = '';
       let entries;
       try {
@@ -48,9 +51,11 @@ const Components = (() => {
         entries = Array.isArray(data) ? data : (data && data.entries) || [];
       } catch (e) {
         if (e.status === 401) throw e;
+        if (ul.__loadSeq !== seq) return;
         ul.append($('li', { class: 'tree__error', role: 'treeitem' }, 'Error: ' + e.message));
         return;
       }
+      if (ul.__loadSeq !== seq) return; // a newer load superseded this one
       entries.sort((a, b) => Number(b.is_dir) - Number(a.is_dir) || a.name.localeCompare(b.name));
 
       for (const e of entries) {
