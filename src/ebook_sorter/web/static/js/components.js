@@ -43,7 +43,9 @@ const Components = (() => {
       ul.innerHTML = '';
       let entries;
       try {
-        entries = await API.browse(root, relPath);
+        // GET /api/browse returns { entries: [...] }; tolerate a bare array too.
+        const data = await API.browse(root, relPath);
+        entries = Array.isArray(data) ? data : (data && data.entries) || [];
       } catch (e) {
         if (e.status === 401) throw e;
         ul.append($('li', { class: 'tree__error', role: 'treeitem' }, 'Error: ' + e.message));
@@ -54,17 +56,23 @@ const Components = (() => {
       for (const e of entries) {
         const childLi = $('li', { role: 'treeitem', 'aria-expanded': e.is_dir ? 'false' : null });
         if (!e.is_dir) {
-          const cb = $('input', { type: 'checkbox', class: 'tree__cb', 'aria-label': `select ${e.name}` });
-          cb.addEventListener('change', () => {
-            if (cb.checked) selected.add(e.rel); else selected.delete(e.rel);
-            emit();
-          });
-          childLi.append(cb, $('span', { class: 'tree__name' }, e.name));
-          if (onPick) {
-            childLi.append($('button', {
-              class: 'btn btn--ghost btn--sm tree__pick', type: 'button',
-              onClick: () => onPick(e.rel),
-            }, 'Use this'));
+          // In multiSelect (folder-selection) mode, files are not individually
+          // selectable — jobs sort folders, not single files.
+          if (multiSelect) {
+            childLi.append($('span', { class: 'tree__name tree__file muted' }, e.name));
+          } else {
+            const cb = $('input', { type: 'checkbox', class: 'tree__cb', 'aria-label': `select ${e.name}` });
+            cb.addEventListener('change', () => {
+              if (cb.checked) selected.add(e.rel); else selected.delete(e.rel);
+              emit();
+            });
+            childLi.append(cb, $('span', { class: 'tree__name' }, e.name));
+            if (onPick) {
+              childLi.append($('button', {
+                class: 'btn btn--ghost btn--sm tree__pick', type: 'button',
+                onClick: () => onPick(e.rel),
+              }, 'Use this'));
+            }
           }
         } else {
           const toggle = $('button', {
@@ -88,7 +96,24 @@ const Components = (() => {
           label.addEventListener('keydown', (ev) => {
             if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggleFn(); }
           });
-          childLi.append(toggle, label, childUl);
+          // In multiSelect mode a folder IS a selectable sort target: give it a
+          // checkbox alongside the expand toggle. In onPick mode the "Use this"
+          // action lives on the folder row instead.
+          if (multiSelect) {
+            const cb = $('input', { type: 'checkbox', class: 'tree__cb', 'aria-label': `select folder ${e.name}` });
+            cb.addEventListener('change', () => {
+              if (cb.checked) selected.add(e.rel); else selected.delete(e.rel);
+              emit();
+            });
+            childLi.append(toggle, cb, label, childUl);
+          } else if (onPick) {
+            childLi.append(toggle, label, $('button', {
+              class: 'btn btn--ghost btn--sm tree__pick', type: 'button',
+              onClick: () => onPick(e.rel),
+            }, 'Use this'), childUl);
+          } else {
+            childLi.append(toggle, label, childUl);
+          }
         }
         ul.append(childLi);
       }
@@ -96,16 +121,18 @@ const Components = (() => {
 
     // root level
     const rootUl = list;
-    loadInto(null, rootUl, '').catch((e) => {
-      if (e.status === 401) opts.onAuthError && opts.onAuthError();
-    });
+    function showRootError(e) {
+      if (e.status === 401) { opts.onAuthError && opts.onAuthError(); return; }
+      rootUl.append($('li', { class: 'tree__error', role: 'treeitem' }, 'Error: ' + e.message));
+    }
+    loadInto(null, rootUl, '').catch(showRootError);
 
     const refreshBtn = $('button', {
       class: 'btn btn--ghost btn--sm', type: 'button', 'aria-label': 'Refresh directory tree',
     }, 'Refresh');
     refreshBtn.addEventListener('click', () => {
       rootUl.innerHTML = '';
-      loadInto(null, rootUl, '').catch(() => {});
+      loadInto(null, rootUl, '').catch(showRootError);
     });
 
     const clearBtn = multiSelect ? $('button', {
