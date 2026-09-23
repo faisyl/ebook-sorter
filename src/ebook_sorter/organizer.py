@@ -6,6 +6,7 @@ import shutil
 from pathlib import Path
 
 from ebook_sorter.models import BookMetadata
+from ebook_sorter.sidecar import sidecar_path
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,11 @@ class Organizer:
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(meta.original_path), str(dest))
         logger.info("Moved: %s -> %s", meta.original_path, dest)
+        src_sidecar = sidecar_path(meta.original_path)
+        if src_sidecar.exists():
+            dst_sidecar = sidecar_path(dest)
+            shutil.move(str(src_sidecar), str(dst_sidecar))
+            logger.info("Moved sidecar: %s -> %s", src_sidecar, dst_sidecar)
         return dest
 
     def _resolve_collision(self, dest: Path) -> Path:

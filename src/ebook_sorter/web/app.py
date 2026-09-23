@@ -33,6 +33,7 @@ from ebook_sorter.lookup.openlibrary import OpenLibraryLookup
 from ebook_sorter.models import BookMetadata
 from ebook_sorter.organizer import Organizer
 from ebook_sorter.pipeline import Pipeline
+from ebook_sorter.sidecar import sidecar_path
 from ebook_sorter.web.config import WebConfig, load_web_config
 from ebook_sorter.web.security import (
     make_session,
@@ -251,6 +252,13 @@ def create_app(web_cfg: WebConfig | None = None) -> FastAPI:
                     shutil.copy2(str(src), str(dest))
                 else:
                     shutil.move(str(src), str(dest))
+                src_sc = sidecar_path(src)
+                if src_sc.exists():
+                    dst_sc = sidecar_path(dest)
+                    if mode == "copy":
+                        shutil.copy2(str(src_sc), str(dst_sc))
+                    else:
+                        shutil.move(str(src_sc), str(dst_sc))
                 store.update_item(
                     item_id=item["id"], actual_dest=dest_str, status="moved",
                 )
@@ -559,6 +567,13 @@ def create_app(web_cfg: WebConfig | None = None) -> FastAPI:
                 shutil.copy2(str(src), str(dest))
             else:
                 shutil.move(str(src), str(dest))
+            src_sc = sidecar_path(src)
+            if src_sc.exists():
+                dst_sc = sidecar_path(dest)
+                if mode == "copy":
+                    shutil.copy2(str(src_sc), str(dst_sc))
+                else:
+                    shutil.move(str(src_sc), str(dst_sc))
             store.update_item(
                 item_id=item["id"], actual_dest=dest_str, status="moved",
             )

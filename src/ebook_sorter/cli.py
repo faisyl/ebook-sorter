@@ -20,7 +20,7 @@ from ebook_sorter.lookup.openlibrary import OpenLibraryLookup
 from ebook_sorter.models import BookMetadata
 from ebook_sorter.organizer import Organizer
 from ebook_sorter.pipeline import Pipeline
-from ebook_sorter.sidecar import read_sidecar, sidecar_path, write_sidecar
+from ebook_sorter.sidecar import read_sidecar, write_sidecar
 
 console = Console(soft_wrap=True)
 
@@ -347,9 +347,6 @@ def organize(
             if meta.confidence >= cfg.confidence_threshold and meta.title:
                 dest = organizer.move_file(meta)
                 if not cfg.dry_run:
-                    src_sidecar = sidecar_path(path)
-                    if src_sidecar.exists():
-                        src_sidecar.unlink()
                     if sidecar:
                         write_sidecar(meta, dest)
                 action = "DRY RUN" if cfg.dry_run else "Moved"
@@ -363,10 +360,6 @@ def organize(
                     dry_run=cfg.dry_run,
                 )
                 dest = uncertain_organizer.move_file(meta)
-                if not cfg.dry_run:
-                    src_sidecar = sidecar_path(path)
-                    if src_sidecar.exists():
-                        src_sidecar.unlink()
                 console.print(f"[yellow]Uncertain:[/yellow] {path.name} -> {dest}")
                 uncertain += 1
             else:
