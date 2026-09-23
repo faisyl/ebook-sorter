@@ -16,6 +16,12 @@ services:
       - APP_PASSWORD=${APP_PASSWORD:?Set APP_PASSWORD (e.g. in a .env file) before starting this service}
       - APP_SECRET=${APP_SECRET:?Set APP_SECRET (e.g. in a .env file) before starting this service}
       - PORT=8080
+      # Optional: a Google Books API key lifts the anonymous rate limit (429s)
+      # that otherwise makes preview crawl. Leave blank to run without one.
+      - GOOGLE_BOOKS_API_KEY=${GOOGLE_BOOKS_API_KEY:-}
+      # Fail fast on rate limits during bulk preview instead of ~30s/book.
+      - EBOOK_SORTER_MAX_RETRIES=${EBOOK_SORTER_MAX_RETRIES:-2}
+      - EBOOK_SORTER_MAX_BACKOFF=${EBOOK_SORTER_MAX_BACKOFF:-3}
     restart: unless-stopped
 
 volumes:

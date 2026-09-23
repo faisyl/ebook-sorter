@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 
 import httpx
@@ -9,8 +10,20 @@ logger = logging.getLogger(__name__)
 
 _USER_AGENT = "ebook-sorter/0.1.0 (https://github.com/faisyl/ebook-sorter)"
 
-_MAX_RETRIES = 5
-_BACKOFF_BASE = 2.0
+
+def _num_env(name: str, default: float) -> float:
+    try:
+        return float(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
+
+
+# Retry/backoff are env-tunable so a bulk/interactive deployment (e.g. the web
+# app previewing thousands of files) can fail fast on 429s instead of burning
+# ~30s per file, while the CLI keeps its patient defaults.
+_MAX_RETRIES = max(1, int(_num_env("EBOOK_SORTER_MAX_RETRIES", 5)))
+_BACKOFF_BASE = _num_env("EBOOK_SORTER_BACKOFF_BASE", 2.0)
+_MAX_BACKOFF = _num_env("EBOOK_SORTER_MAX_BACKOFF", 30.0)
 
 
 class RateLimitedClient:
@@ -37,7 +50,12 @@ class RateLimitedClient:
             try:
                 resp = httpx.get(url, **kwargs)
                 if resp.status_code == 429:
-                    retry_after = float(resp.headers.get("Retry-After", _BACKOFF_BASE * attempt))
+                    retry_after = min(
+                        float(resp.headers.get("Retry-After", _BACKOFF_BASE * attempt)),
+                        _MAX_BACKOFF,
+                    )
+                    if attempt >= _MAX_RETRIES:
+                        return resp  # out of retries — surface the 429 to caller
                     logger.warning(
                         "Rate limited (429) on %s, backing off %.1fs (attempt %d/%d)",
                         url, retry_after, attempt, _MAX_RETRIES,
