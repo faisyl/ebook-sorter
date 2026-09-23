@@ -366,7 +366,17 @@ const Components = (() => {
       badges[1].textContent = `Uncertain: ${c2.uncertain||0}`;
       badges[2].textContent = `Error: ${c2.error||0}`;
       badges[3].textContent = `Moved: ${c2.moved||0}`;
-      badges[4].textContent = `${done2}/${c2.total||0}`;
+      // done/total lives in the trailing .muted span, not a .badge
+      const doneEl = counts.querySelector('.muted');
+      if (doneEl) doneEl.textContent = `${done2}/${c2.total||0}`;
+      // Header: percent text + status badge
+      const pctText = wrap.querySelector('.spread .text-sm');
+      if (pctText) pctText.textContent = `${pct2}% complete`;
+      const statusBadge = wrap.querySelector('.spread .badge');
+      if (statusBadge && c2.status) {
+        statusBadge.textContent = c2.status;
+        statusBadge.dataset.status = c2.status;
+      }
     }
     return wrap;
   }

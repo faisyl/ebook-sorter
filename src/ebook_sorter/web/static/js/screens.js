@@ -98,18 +98,40 @@
       onPick: (path) => {
         state.outputDir = path;
         outInput.value = path;
+        updateTarget();
       },
     });
     outTree.querySelector('.tree-toolbar').remove();
+
+    // Effective-target readout: empty output_dir means the /output root itself.
+    const targetLabel = document.createElement('p');
+    targetLabel.className = 'field-hint';
+    function updateTarget() {
+      const v = (state.outputDir || '').trim();
+      targetLabel.innerHTML = v
+        ? `Target: <code class="mono">/output/${UI.escapeHtml(v)}</code>`
+        : 'Target: <code class="mono">/output</code> (root)';
+    }
+
+    // Let the user pick the output root itself (default), not just subfolders.
+    const rootBtn = document.createElement('button');
+    rootBtn.type = 'button';
+    rootBtn.className = 'btn btn--ghost btn--sm mb-2';
+    rootBtn.textContent = 'Use output root (/output)';
+    rootBtn.addEventListener('click', () => {
+      state.outputDir = '';
+      outInput.value = '';
+      updateTarget();
+    });
+
     const outInput = document.createElement('input');
     outInput.type = 'text';
     outInput.id = 'output-dir';
-    outInput.placeholder = 'Click a folder in the tree, or type a path';
+    outInput.placeholder = 'Leave empty for /output root, or click/type a subfolder';
     outInput.value = state.outputDir;
-    outInput.addEventListener('input', () => { state.outputDir = outInput.value; });
-    outField.append(outInput, outTree, document.createElement('p'));
-    outField.querySelector('p').className = 'field-hint';
-    outField.querySelector('p').textContent = 'Where sorted books will be written (/output).';
+    outInput.addEventListener('input', () => { state.outputDir = outInput.value; updateTarget(); });
+    updateTarget();
+    outField.append(outInput, rootBtn, outTree, targetLabel);
 
     // Options
     const templateField = document.createElement('div');
@@ -187,6 +209,7 @@
     wrap.api = {
       onEnter: () => {
         outInput.value = state.outputDir;
+        updateTarget();
         templateInput.value = state.options.template;
         thresholdInput.value = state.options.confidence_threshold;
         ocrCheck.checked = state.options.ocr_enabled;
@@ -214,6 +237,18 @@
 
     const progress = Components.jobProgress({});
     const countsRow = progress.querySelector('.counts');
+
+    // Shown while the backend is still walking the folder tree (total not yet
+    // known) so a large folder doesn't look frozen.
+    const scanNote = document.createElement('p');
+    scanNote.className = 'muted text-sm mt-2';
+    scanNote.textContent = 'Scanning folders for ebooks… (large folders can take a while)';
+    scanNote.hidden = true;
+    function refreshScanNote() {
+      const j = state.currentJob || {};
+      const active = j.status === 'created' || j.status === 'previewing' || !j.status;
+      scanNote.hidden = !(active && !(j.total > 0));
+    }
 
     // Action buttons
     const actions = document.createElement('div');
@@ -276,9 +311,21 @@
     // Log list
     const logList = Components.logList();
 
-    wrap.append(head, progress, actions, document.createElement('h4'), logList);
+    wrap.append(head, progress, scanNote, actions, document.createElement('h4'), logList);
     wrap.querySelector('h4').className = 'mt-4 mb-2';
     wrap.querySelector('h4').textContent = 'Live log';
+
+    // Which item ids have already been written to the log (dedupe across polls).
+    const loggedItems = new Set();
+    function logItem(item) {
+      const key = item.id + ':' + item.status;
+      if (loggedItems.has(key)) return;
+      loggedItems.add(key);
+      const type = item.status === 'matched' ? 'success'
+        : item.status === 'error' || item.status === 'corrupt' ? 'error'
+        : item.status === 'uncertain' ? 'warn' : 'info';
+      logList.api.append({ type, source: item.source_path, message: '→ ' + item.status });
+    }
 
     let wsHandle = null;
 
@@ -299,13 +346,16 @@
           // connect events
           wsHandle = API.events(job.id, {
             onJob: (j) => {
+              Object.assign(state.currentJob, j);
               if (j.status === 'preview_ready' || j.status === 'completed') {
                 applyBtn.classList.remove('hidden');
               }
-              progress.api.update(j);
+              progress.api.update(state.currentJob);
+              refreshScanNote();
             },
             onLog: (entry) => logList.api.append(entry),
           });
+          refreshScanNote();
           // poll items for the table
           pollItems(job.id);
         } catch (e) {
@@ -324,6 +374,18 @@
 
     async function pollItems(jobId) {
       try {
+        // Refresh the job summary here too: the WS can stay open but silent
+        // (backend emits nothing), which suppresses api.events' own poll — so
+        // this loop is the reliable driver for progress/status.
+        try {
+          const job = await API.jobs.get(jobId);
+          Object.assign(state.currentJob, job);
+          progress.api.update(state.currentJob);
+          if (job.status === 'preview_ready' || job.status === 'completed') {
+            applyBtn.classList.remove('hidden');
+          }
+        } catch (e) { /* swallow */ }
+
         const data = await API.jobs.items(jobId);
         if (data.items) {
           state.currentJob.items = state.currentJob.items || [];
@@ -331,9 +393,11 @@
             const existing = state.currentJob.items.find((i) => i.id === item.id);
             if (existing) Object.assign(existing, item);
             else state.currentJob.items.push(item);
+            logItem(item); // populate the Live log even when WS log events aren't sent
           }
         }
       } catch (e) { /* swallow */ }
+      refreshScanNote();
       if (wrap.api._active) setTimeout(() => pollItems(jobId), 2000);
     }
 
