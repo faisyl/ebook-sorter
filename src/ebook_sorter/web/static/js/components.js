@@ -353,7 +353,7 @@ const Components = (() => {
       counts,
     ]);
 
-    wrap.api = update;
+    wrap.api = { update };
     function update(job) {
       const c2 = job || {};
       const done2 = (c2.matched||0) + (c2.uncertain||0) + (c2.error||0) + (c2.moved||0);
