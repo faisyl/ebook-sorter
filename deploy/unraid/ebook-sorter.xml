@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>ebook-sorter</Name>
+  <Repository>ghcr.io/faisyl/ebook-sorter:web</Repository>
+  <Registry>https://github.com/faisyl/ebook-sorter/pkgs/container/ebook-sorter</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/faisyl/ebook-sorter</Support>
+  <Project>https://github.com/faisyl/ebook-sorter</Project>
+  <Overview>Web UI to sort and organise an ebook library: pick source folders, preview matches, review/redo mismatches, then move files to a sorted output tree. Set a Google Books API Key to avoid anonymous rate limits.</Overview>
+  <Category>MediaApp:Books Tools:</Category>
+  <WebUI>http://[IP]:[PORT:8080]/</WebUI>
+  <TemplateURL/>
+  <Icon>https://raw.githubusercontent.com/faisyl/ebook-sorter/main/deploy/unraid/icon.png</Icon>
+  <ExtraParams/>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled>1758592800</DateInstalled>
+  <DonateText/>
+  <DonateLink/>
+  <Requires/>
+  <Config Name="WebUI Port" Target="8080" Default="8680" Mode="tcp" Description="Host port for the web UI" Type="Port" Display="always" Required="true" Mask="false">8680</Config>
+  <Config Name="Books library" Target="/books" Default="/mnt/user/Books" Mode="rw" Description="Library to sort (mounted read-write; the app moves matched files)" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/Books</Config>
+  <Config Name="App data" Target="/data" Default="/mnt/user/appdata/ebook-sorter" Mode="rw" Description="Persistent job database" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/ebook-sorter</Config>
+  <Config Name="Google Books API Key" Target="GOOGLE_BOOKS_API_KEY" Default="" Mode="" Description="Optional. Lifts the anonymous rate limit (HTTP 429) that makes preview slow. Create a free key in Google Cloud console (enable Books API)." Type="Variable" Display="always" Required="false" Mask="false"></Config>
+  <Config Name="Login user" Target="APP_USER" Default="admin" Mode="" Description="Web UI username" Type="Variable" Display="always" Required="true" Mask="false">admin</Config>
+  <Config Name="Login password" Target="APP_PASSWORD" Default="" Mode="" Description="Web UI password" Type="Variable" Display="always" Required="true" Mask="true">IvEwfB6Pi1xPzGBPyvrToMUX</Config>
+  <Config Name="Session secret" Target="APP_SECRET" Default="" Mode="" Description="Signs login cookies; keep stable so logins survive restarts" Type="Variable" Display="advanced" Required="true" Mask="true">a43f307e2563b2044fad178f4afadbbe3ad1c751ca495ffce8319e1159e43ed0</Config>
+  <Config Name="Output subfolder" Target="OUTPUT_ROOT" Default="/books/New-Sorted" Mode="" Description="Where sorted books are written (inside /books)" Type="Variable" Display="advanced" Required="true" Mask="false">/books/New-Sorted</Config>
+  <Config Name="Books root (container)" Target="BOOKS_ROOT" Default="/books" Mode="" Description="Container path of the library (matches the Books mount)" Type="Variable" Display="advanced" Required="true" Mask="false">/books</Config>
+  <Config Name="App data (container)" Target="APP_DATA" Default="/data" Mode="" Description="Container path of the job database (matches the App data mount)" Type="Variable" Display="advanced" Required="true" Mask="false">/data</Config>
+  <Config Name="Match threshold" Target="CONFIDENCE_THRESHOLD" Default="0.7" Mode="" Description="Confidence at/above which a match is auto-accepted" Type="Variable" Display="advanced" Required="false" Mask="false">0.7</Config>
+  <Config Name="Lookup max retries" Target="EBOOK_SORTER_MAX_RETRIES" Default="2" Mode="" Description="Retries per lookup before giving up (low = fail fast on rate limits)" Type="Variable" Display="advanced" Required="false" Mask="false">2</Config>
+  <Config Name="Lookup max backoff (s)" Target="EBOOK_SORTER_MAX_BACKOFF" Default="3" Mode="" Description="Cap on per-retry backoff seconds" Type="Variable" Display="advanced" Required="false" Mask="false">3</Config>
+</Container>
